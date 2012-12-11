@@ -23,6 +23,8 @@
  *
  * Multibyte ints as specified in the WBXML format.
  *
+ * Currently big endian only.
+ *
  * We only need to/from int/int64.
  *
  * {1 Where should I start?}
@@ -47,16 +49,21 @@ type mbint = binary
 
 module MBInt {
 
+  /** Zero **/
+  mbint zero = Binary.of_string("\000")
+
   /** Return the number of bytes in a multibyte int generated from an int. */
   function int size(int i) {
-         if (i >= -0x7f && i <= 0x7f) 1
-    else if (i >= -0x3fff && i <= 0x3fff) 2
-    else if (i >= -0x1fffff && i <= 0x1fffff) 3
-    else if (i >= -0xfffffff && i <= 0xfffffff) 4
-    else if (i >= -0x7ffffffff && i <= 0x7ffffffff) 5
-    else if (i >= -0x3ffffffffff && i <= 0x3ffffffffff) 6
-    else if (i >= -0x1ffffffffffff && i <= 0x1ffffffffffff) 7
-    else Binary.length(of_int(i))
+    if (i >= 0) {
+           if (i <= 0x7f) 1
+      else if (i <= 0x3fff) 2
+      else if (i <= 0x1fffff) 3
+      else if (i <= 0xfffffff) 4
+      else if (i <= 0x7ffffffff) 5
+      else if (i <= 0x3ffffffffff) 6
+      else if (i <= 0x1ffffffffffff) 7
+      else Binary.length(of_int(i))
+    } else Binary.length(of_int(i))
   }
 
   private rem = %%BslPervasives.int_rem%%
@@ -70,13 +77,17 @@ module MBInt {
         b
       } else {
         // TODO: Fix these buggy logical ops.
+        // Note: on node.js bitwise ops are only 32-bit.
         n = i / 0x80 //Bitwise.lsr(i,7)
         m1 = rem(i,0x80) //Bitwise.land(i,0x7f)
         m = Bitwise.lor(m1,if (first) 0 else 0x80)
         aux(n,[m|os],false)
       }
     }
-    aux(i,[],true)
+    if (i == 0)
+      zero
+    else
+      aux(i,[],true)
   } 
 
   /** Convert a multibyte int into an int. */
@@ -123,9 +134,6 @@ module MBInt {
     }
     aux(0, Int64.zero)
   }
-
-  /** Zero **/
-  zero = of_int(0)
 
 }
 

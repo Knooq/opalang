@@ -90,17 +90,31 @@ module MBInt {
       aux(i,[],true)
   } 
 
-  /** Convert a multibyte int into an int. */
-  function to_int(mbint mbi) {
+  /** Safely convert a multibyte int embedded in a binary into an int. */
+  function outcome((int,int),string) to_int_posr(mbint mbi, int pos) {
     recursive function aux(pos, i) {
-      o = Binary.get_uint8(mbi,pos)
-      i1 = i * 0x80 //Bitwise.lsl(i,7)
-      o2 = rem(o,0x80) //Bitwise.land(o,0x7f)
-      i = i1+o2
-      if (Bitwise.land(o,0x80) != 0) aux(pos+1,i) else i
+      match (Binary.get_uint8r(mbi,pos)) {
+      case {success:o}:
+        i1 = i * 0x80 //Bitwise.lsl(i,7)
+        o2 = rem(o,0x80) //Bitwise.land(o,0x7f)
+        i = i1+o2
+        if (Bitwise.land(o,0x80) != 0) aux(pos+1,i) else {success:(pos+1,i)}
+      case {~failure}: {~failure};
+      }
     }
-    aux(0, 0)
+    aux(pos, 0)
   }
+
+  /** Convert a multibyte int embedded in a binary into an int. */
+  function (int,int) to_int_pos(mbint mbi, int pos) {
+    match (to_int_posr(mbi, pos)) {
+    case {success:(pos,i)}: (pos,i);
+    case {~failure}: @fail(failure);
+    }
+  }
+
+  /** Convert a multibyte int into an int. */
+  to_int = to_int_pos(_, 0).f2
 
   /** Give the number of bytes in a multibyte int generated from an int64. */
   function int size64(int64 i64) {
@@ -124,16 +138,30 @@ module MBInt {
     aux(i64,[],true)
   } 
 
-  /** Extract an int64 value from a multibyte int. */
-  function int64 to_int64(mbint mbi) {
+  /** Safely extract an int64 value embedded in a binary from a multibyte int. */
+  function outcome((int,int64),string) to_int64_posr(mbint mbi, int pos) {
     recursive function aux(pos, i64) {
-      o = Binary.get_uint8(mbi,pos)
-      o64 = Int64.of_int(Bitwise.land(o,0x7f))
-      i = Int64.add(Int64.shift_left(i64,7),o64)
-      if (Bitwise.land(o,0x80) != 0) aux(pos+1,i) else i
+      match (Binary.get_uint8r(mbi,pos)) {
+      case {success:o}:
+        o64 = Int64.of_int(Bitwise.land(o,0x7f))
+        i = Int64.add(Int64.shift_left(i64,7),o64)
+        if (Bitwise.land(o,0x80) != 0) aux(pos+1,i) else {success:(pos+1,i)}
+      case {~failure}: {~failure};
+      }
     }
-    aux(0, Int64.zero)
+    aux(pos, Int64.zero)
   }
+
+  /** Convert a multibyte int embedded in a binary into an int64. */
+  function (int,int64) to_int64_pos(mbint mbi, int pos) {
+    match (to_int64_posr(mbi, pos)) {
+    case {success:(pos,i64)}: (pos,i64);
+    case {~failure}: @fail(failure);
+    }
+  }
+
+  /** Extract an int64 value from a multibyte int. */
+  to_int64 = to_int64_pos(_, 0).f2
 
 }
 

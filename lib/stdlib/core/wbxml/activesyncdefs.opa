@@ -662,9 +662,10 @@ module ActiveSyncDefs {
   ]
 
   /** No attributes predefined  for ActiveSync */
-  att_code_space = []
+  attrstart_tokens = []
+  attrvalue_tokens = []
 
   /** Context for WBXml */
-  context = WBXml.init_context(3, namespaces, tag_code_space, att_code_space)
+  context = WBXml.init_context(WBXml.default_header, namespaces, tag_code_space, attrstart_tokens, attrvalue_tokens)
 
 }

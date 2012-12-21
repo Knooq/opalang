@@ -10,6 +10,9 @@
     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+import stdlib.core.map
+import stdlib.core.xhtml
+
 type WBXml.publicid = {int id} or {string str}
 
 type WBXml.header = {
@@ -20,12 +23,17 @@ type WBXml.header = {
 
 type WBXml.context = {
   int debug,           /** Debug flag */
+  bool use_st,         /** Use string table */
   binary buf,          /** The wbxml being built */
   int pos,             /** Position during parsing */
   WBXml.header header, /** Header read during parsing */
   int tag_cp,          /** Current tag code page */
+  string tag_ns,       /** Current tag namespace value */
   int att_cp,          /** Current attribute code page */
+  string att_ns,       /** Current attribute namespace value */
   int nsti,            /** Next string table index */
+  list(string) default_namespaces, /** Stack of default namespaces */
+  stringmap(list(string)) named_namespaces, /** Stack of namespace names */
   stringmap(int) st,   /** String table */
   intmap(string) rst,  /** Reverse string table */
   intmap(string) namespace_map, /** Map from code page to namespace */
@@ -142,10 +150,11 @@ module WBXml {
    */
   function WBXml.context init_context(header, namespaces, tag_code_space, attrstart, attrvalue) {
     {
-      debug:0,
+      debug:0, use_st:false,
       buf:Binary.create(0), pos:0,
       ~header,
-      tag_cp:0, att_cp:0, nsti:0, st:StringMap.empty, rst:IntMap.empty,
+      tag_cp:0, tag_ns:"", att_cp:0, att_ns:"", nsti:0, st:StringMap.empty, rst:IntMap.empty,
+      default_namespaces:[], named_namespaces:StringMap.empty,
       namespace_map:List.fold(function ((code, tag), nm) { IntMap.add(code, tag, nm) },namespaces,IntMap.empty),
       namespace_rmap:List.fold(function ((code, tag), nm) { StringMap.add(tag, code, nm) },namespaces,StringMap.empty),
       tag_code_space:map_from_code_space(tag_code_space),
@@ -164,6 +173,8 @@ module WBXml {
   private function tp(string tag) { Ansi.print({blue},tag) }
 
   private function pcode(int code) { Ansi.print({red},"0x{String.pad_left("0",2,Int.to_hex(code))}") }
+
+  private function pns(string namespace) { Ansi.print({cyan},namespace) }
 
   private function sanitize(string str) {
     Ansi.print({magenta},String.replace("\n","\\n",str))
@@ -226,15 +237,50 @@ module WBXml {
     ctxt
   }
 
-  private function get_mapping(tagatt, ctxt, ta, namespace) {
-    cp =
-      if (namespace == "")
-        0
-      else
-        match (StringMap.get(namespace, ctxt.namespace_rmap)) {
-        case {some:cp}: cp;
-        default: 0;
+  private function ctxt_cp(ctxt, tagatt) {
+    current_cp =
+      match (tagatt) {
+        case {tag}: ctxt.tag_cp;
+        case {attrstart}: ctxt.att_cp;
+        case {attrvalue}: ctxt.att_cp;
+      }
+    match (ctxt.default_namespaces) {
+    case []: current_cp;
+    case [dflt|_]:
+      match (StringMap.get(dflt,ctxt.namespace_rmap)) {
+      case {some:cp}:
+        debug(ctxt,2,"WBXml.encode","default namespace {pns(dflt)} in map code page = {pcode(cp)}")
+        cp;
+      default: current_cp;
+      }
+    }
+  }
+
+  private function get_cp(ctxt, tagatt, ns) { // TODO: direct map from nns to codepage
+    if (ns == "")
+      ctxt_cp(ctxt, tagatt)
+    else
+      match (StringMap.get(ns, ctxt.namespace_rmap)) {
+      case {some:cp}:
+        debug(ctxt,2,"WBXml.encode","namespace {pns(ns)} in map code page = {pcode(cp)}")
+        cp;
+      default:
+        match (StringMap.get(ns, ctxt.named_namespaces)) {
+        case {some:[nns|_]}:
+          debug(ctxt,2,"WBXml.encode","namespace {pns(ns)} in maps to namespace {pns(nns)}")
+          match (StringMap.get(nns, ctxt.namespace_rmap)) {
+          case {some:cp}:
+            debug(ctxt,2,"WBXml.encode","namespace {pns(nns)} in map code page = {pcode(cp)}")
+            cp;
+          default: ctxt_cp(ctxt, tagatt);
+          }
+        default: ctxt_cp(ctxt, tagatt);
         }
+      }
+  }
+
+  private function get_mapping(tagatt, ctxt, ta, namespace) { // TODO: return namespace error
+    cp = get_cp(ctxt, tagatt, namespace)
     match (match (tagatt) {
            case {tag}: ({tag:get_code_from_tag(ctxt, cp, ta)});
            case {attrstart}: {attrstart:get_prefix_list_from_attrstart(ctxt, cp, ta)};
@@ -264,6 +310,15 @@ module WBXml {
     ctxt
   }
 
+  function opaque(ctxt, string opaque) {
+    len = String.length(opaque)
+    debug(ctxt,2,"WBXml.encode","OPAQUE {Ansi.print({red},"{len}")} bytes")
+    Binary.add_uint8(ctxt.buf,OPAQUE)
+    Binary.add_binary(ctxt.buf,MBInt.of_int(len))
+    Binary.add_string(ctxt.buf,opaque)
+    ctxt
+  }
+
   function literal(ctxt, int idx, atts, content) {
     literal = LITERAL
     literal = if (List.length(atts) > 0) Bitwise.lor(literal,0x80) else literal
@@ -280,23 +335,33 @@ module WBXml {
     ctxt
   }
 
-  function switch_page(ctxt, tagatt, cp) {
+  function switch_page(ctxt, tagatt, int cp) {
+    ns = match (IntMap.get(cp,ctxt.namespace_map)) { case {some:ns}: ns; case {none}: ""; }
     (at_cp,set) =
       match (tagatt) {
-      case {tag}: (ctxt.tag_cp,function (ctxt,cp) { {ctxt with tag_cp:cp} });
-      case {att}: (ctxt.att_cp,function (ctxt,cp) { {ctxt with att_cp:cp} });
+      case {tag}: (ctxt.tag_cp,function (ctxt,cp) { {ctxt with tag_cp:cp, tag_ns:ns} });
+      case {att}: (ctxt.att_cp,function (ctxt,cp) { {ctxt with att_cp:cp, att_ns:ns} });
       }
     if (at_cp != cp) {
-      debug(ctxt,2,"WBXml.encode","SWITCH_PAGE {cp}")
+      debug(ctxt,2,"WBXml.encode","SWITCH_PAGE {pcode(cp)}")
       Binary.add_uint8(ctxt.buf,SWITCH_PAGE);
       Binary.add_uint8(ctxt.buf,cp);
       set(ctxt,cp)
     } else ctxt
   }
 
+  function Outcome_fold(f, l, acc) {
+    List.fold(function (e, acc) {
+                match (acc) {
+                case {success:acc}: f(e, acc);
+                case {~failure}: {~failure};
+                }
+              },l,{success:acc})
+  }
+
   function attributes(ctxt, namespace, atts) {
     if (atts != []) {
-      end_tag("attributes",List.fold(function (att, ctxt) {
+      ctxt = List.fold(function (att, ctxt) {
         match
           (match (get_mapping({attrstart}, ctxt, att.name, namespace)) {
            case {some:{attrstart:(cp,pfxlst)}}:
@@ -337,12 +402,64 @@ module WBXml {
             str_i(ctxt, value);
           }
         case (ctxt,_,{false}): ctxt;
-        }},atts,ctxt))
+        }},atts,ctxt)
+      end_tag("attributes",ctxt)
     } else ctxt
   }
 
-  function start_tag(ctxt, tag, namespace, atts, content) {
+  private function remove_trailing_colon(string str) {
+    if (String.has_suffix(":",str)) Option.default("",String.get_prefix(String.length(str)-1,str)) else str
+  }
+
+  private function push_namespace(ctxt, nsxml) {
+//jlog("push_namespace: {Ansi.print({yellow},"{nsxml}")}")
+    if (nsxml == [])
+      ctxt
+    else {
+      List.fold(function (binding, ctxt) {
+                  match (binding) {
+                  case ~{default:dflt}:
+                    dflt = remove_trailing_colon(dflt)
+                    debug(ctxt,2,"WBXml.encode","push default -> {Ansi.print({yellow},dflt)}");
+                    {ctxt with default_namespaces:[dflt|ctxt.default_namespaces]};
+                  case ~{name, uri}:
+                    uri = remove_trailing_colon(uri)
+                    debug(ctxt,2,"WBXml.encode","push {Ansi.print({yellow},"{name} -> {uri}")}");
+                    nns = Option.default([],StringMap.get(name,ctxt.named_namespaces))
+                    nns = [uri|nns]
+                    {ctxt with named_namespaces:StringMap.add(name,nns,ctxt.named_namespaces)};
+                  }
+                },nsxml,ctxt)
+    }
+  }
+
+  private function pop_list(list('a) l) { match (l) { case []: []; case [_|t]: t; } }
+
+  private function pop_namespace(ctxt, nsxml) {
+//jlog("pop_namespace: {Ansi.print({yellow},"{nsxml}")}")
+    if (nsxml == [])
+      ctxt
+    else {
+      List.fold(function (binding, ctxt) {
+                  match (binding) {
+                  case ~{default:dflt}:
+                    debug(ctxt,2,"WBXml.encode","pop default {Ansi.print({yellow},dflt)}");
+                    {ctxt with default_namespaces:pop_list(ctxt.default_namespaces)};
+                  case ~{name, uri}:
+                    uri = remove_trailing_colon(uri)
+                    debug(ctxt,2,"WBXml.encode","pop {Ansi.print({yellow},"{name} -> {uri}")}");
+                    nns = Option.default([],StringMap.get(name,ctxt.named_namespaces))
+                    nns = pop_list(nns)
+                    {ctxt with named_namespaces:StringMap.add(name,nns,ctxt.named_namespaces)};
+                  }
+                },nsxml,ctxt)
+    }
+  }
+
+  function start_tag(ctxt, tag, namespace, nsxml, atts, content) {
     debug(ctxt,2,"WBXml.encode","tag {tp(tag)}")
+//jlog("namespace:{Ansi.print({cyan},namespace)}  nsxml:{Ansi.print({cyan},"{nsxml}")}  atts:{atts}")
+    ctxt = push_namespace(ctxt, nsxml)
     match (get_mapping({tag}, ctxt, tag, namespace)) {
     case {some:{tag:(cp,code)}}:
       ctxt = switch_page(ctxt, {tag}, cp)
@@ -361,18 +478,43 @@ module WBXml {
     }
   }
 
+/*
+  function outcome_fold(f, l, acc) {
+    recursive function aux(l, acc) {
+      match (acc) {
+      case {success:acc}:
+        match (l) {
+        case []: {success:acc};
+        case [e|l]: aux(l, f(e,acc));
+        }
+      case {~failure}: {~failure};
+      }
+    }
+    aux(l, {success:acc})
+  }
+*/
+
   function of_xmlns0(ctxt, xmlns xmlns) {
+//jlog("of_xmlns0: xmlns={Xmlns.to_string(xmlns)}\n{String.replace("\n","\\n","{xmlns}")}")
     match (xmlns) {
       case {text:""}: {success:ctxt};
       case {~text}: // *MUST NOT* have null characters
-        match (StringMap.get(text, ctxt.st)) {
-        case {some:idx}: {success:str_t(ctxt, idx)};
-        case {none}: {success:str_i(ctxt, text)};
-        }
-      case {args:[], content:[], ~namespace, specific_attributes:_, xmlns:_, ~tag}:
-        {success:start_tag(ctxt, tag, namespace, [], [])}
-      case {~args, ~content, ~namespace, specific_attributes:_, xmlns:_, ~tag}:
-        ctxt = start_tag(ctxt, tag, namespace, args, content)
+        if (String.contains(text,"\000"))
+          {failure:"String contains null \"{sanitize(text)}\""}
+        else
+          match (StringMap.get(text, ctxt.st)) {
+          case {some:idx}: {success:str_t(ctxt, idx)};
+          case {none}: {success:str_i(ctxt, text)};
+          }
+      case {args:[], content:[], ~namespace, specific_attributes:_, xmlns:nsxml, ~tag}:
+        ctxt = start_tag(ctxt, tag, namespace, nsxml, [], [])
+        ctxt = pop_namespace(ctxt, nsxml)
+        {success:ctxt}
+      case {args:[], content:[{~text}], namespace:_, specific_attributes:_, xmlns:[], tag:"Opaque"}:
+        {success:opaque(ctxt, text)};
+      case {~args, content:[{fragment:content}], ~namespace, specific_attributes:_, xmlns:nsxml, ~tag}
+      case {~args, ~content, ~namespace, specific_attributes:_, xmlns:nsxml, ~tag}:
+        ctxt = start_tag(ctxt, tag, namespace, nsxml, args, content)
         match (List.fold(function (xmlns, ctxt) {
                            match (ctxt) {
                            case {success:ctxt}: of_xmlns0(ctxt, xmlns);
@@ -380,11 +522,12 @@ module WBXml {
                          }},content,{success:ctxt})) {
         case {success:ctxt}:
           ctxt = if (content != []) end_tag(tag,ctxt) else ctxt
+          ctxt = pop_namespace(ctxt, nsxml)
           {success:ctxt};
         case {~failure}: {~failure};
         }
+      case {~fragment}: Outcome_fold(function (xmlns, ctxt) { of_xmlns0(ctxt, xmlns) },fragment,ctxt);
       case {content_unsafe:_}: {failure:"content_unsafe"};
-      case {fragment:_}: {failure:"fragment"};
       case {xml_dialect:_}: {failure:"xml_dialect"};
     }
   }
@@ -407,13 +550,15 @@ module WBXml {
       case {content_unsafe:_}: ctxt;
       case {fragment:_}: ctxt;
       case {xml_dialect:_}: ctxt;
-      case {~args, ~content, ~namespace, specific_attributes:_, xmlns:_, ~tag}:
+      case {~args, ~content, ~namespace, specific_attributes:_, xmlns:nsxml, ~tag}:
+        ctxt = push_namespace(ctxt, nsxml)
         ctxt =
           match (get_mapping({tag}, ctxt, tag, namespace)) {
           case {none}: add_to_string_table(ctxt, tag);
           case {some:_}: ctxt;
           }
         ctxt = string_table_of_attributes(ctxt, namespace, args)
+        ctxt = pop_namespace(ctxt, nsxml)
         List.fold(function (xmlns, ctxt) { string_table_of_xmlns(ctxt, xmlns) },content,ctxt)
     }
   }
@@ -422,8 +567,8 @@ module WBXml {
 
   function of_xmlns(WBXml.context ctxt, xmlns xmlns, int hint) {
     debug(ctxt,1,"WBXml.of_xmlns","xmlns=\n{Ansi.print({cyan},Xmlns.to_string(xmlns))}")
-    ctxt = { ctxt with buf:Binary.create(hint), tag_cp:0, att_cp:0, nsti:0, st:StringMap.empty }
-    ctxt = string_table_of_xmlns(ctxt, xmlns)
+    ctxt = { ctxt with buf:Binary.create(hint), tag_cp:0, tag_ns:"", att_cp:0, att_ns:"", nsti:0, st:StringMap.empty }
+    ctxt = if (ctxt.use_st) string_table_of_xmlns(ctxt, xmlns) else ctxt
     ctxt = start(ctxt)
     match (of_xmlns0(ctxt, xmlns)) {
     case {success:ctxt}:
@@ -547,7 +692,10 @@ module WBXml {
     match (MBInt.to_int_posr(ctxt.buf,ctxt.pos)) {
     case {success:(pos,length)}:
       match (Binary.get_binaryr(ctxt.buf,pos,length)) {
-      case {success:bin}: {success:({ctxt with pos:pos+length},string_of_binary(bin))};
+      case {success:bin}:
+        str = %%bslBinary.to_encoding%%(bin,"binary")
+        debug(ctxt, 2, "WBXml.decode", "got opaque {Ansi.print({red},Int.to_string(String.length(str)))} bytes")
+        {success:({ctxt with pos:pos+length},str)};
       case {~failure}: {~failure};
       }
     case {~failure}: {~failure};
@@ -561,15 +709,20 @@ module WBXml {
     }
   }
 
+  private function tagattrstr(tagattr) { match (tagattr) { case {tag}: "tag"; case {attr}: "attribute"; }
+  }
+
   function get_switch_page(ctxt, tagattr, (WBXml.context -> outcome(_,string)) goto) {
     match (Binary.get_uint8r(ctxt.buf,ctxt.pos)) {
     case {success:cp}:
+      ns = match (IntMap.get(cp,ctxt.namespace_map)) { case {some:ns}: ns; case {none}: ""; }
       ctxt =
         match (tagattr) {
-        case {tag}: {ctxt with tag_cp:cp};
-        case {attr}: {ctxt with att_cp:cp};
+        case {tag}: {ctxt with tag_cp:cp, tag_ns:ns};
+        case {attr}: {ctxt with att_cp:cp, tag_ns:ns};
         }
-      goto(ctxt);
+      debug(ctxt, 2, "WBXml.decode", "Switch to {tagattrstr(tagattr)} codepage {pcode(cp)} ({pns(ns)})")
+      goto({ctxt with pos:ctxt.pos+1});
     case {~failure}: {~failure};
     }
   }
@@ -592,7 +745,7 @@ module WBXml {
     case {success:code}:
       debug(ctxt, 4, "code", "{pcode(code)}")
       match (code) {
-      case /*SWITCH_PAGE*/0x00: get_switch_page(ctxt, {tag}, get_content(tag,_));
+      case /*SWITCH_PAGE*/0x00: get_switch_page({ctxt with pos:ctxt.pos+1}, {tag}, get_content(tag,_));
       case /*ENTITY*/0x02: get_text(tag,get_entity({ctxt with pos:ctxt.pos+1}));
       case /*STR_I*/0x03: get_text(tag,get_str_i({ctxt with pos:ctxt.pos+1}));
       case /*STR_T*/0x83: get_text(tag,get_str_t({ctxt with pos:ctxt.pos+1}));
@@ -710,7 +863,7 @@ module WBXml {
 
   function make_tag(ctxt, tag, args, content) {
     debug(ctxt, 2, "WBXml.decode", "make tag {Ansi.print({blue},tag)}")
-    {success:(ctxt,{~args, ~content, namespace:"", specific_attributes:none, xmlns:[], ~tag})}
+    {success:(ctxt,{~args, ~content, namespace:ctxt.tag_ns, specific_attributes:none, xmlns:[], ~tag})}
   }
 
   function make_content(ctxt, tag, atts, has_content) {
@@ -741,7 +894,9 @@ module WBXml {
       has_atts = Bitwise.land(stag,0x80) != 0
       has_content = Bitwise.land(stag,0x40) != 0
       stag = Bitwise.land(stag,0x3f)
-      if (stag == LITERAL) {
+      match (stag) {
+      case /*SWITCH_PAGE*/0x00: get_switch_page(ctxt, {tag}, get_tag);
+      case /*LITERAL*/0x04:
         match (MBInt.to_int_posr(ctxt.buf,ctxt.pos)) {
         case {success:(pos,index)}:
           ctxt = {ctxt with ~pos}
@@ -751,10 +906,10 @@ module WBXml {
           }
         case {~failure}: {~failure};
         }
-      } else {
+      default:
         match (get_tag_from_code(ctxt, ctxt.tag_cp, stag)) {
         case {some:tag}: got_tag(ctxt, tag, has_atts, has_content);
-        case {none}: {failure:"Tag code not in code space"};
+        case {none}: {failure:"Tag code not in code space {pcode(stag)}"};
         }
       }
     case {~failure}: {~failure};

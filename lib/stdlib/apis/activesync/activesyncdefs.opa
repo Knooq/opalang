@@ -1,9 +1,11 @@
 
+import stdlib.core.wbxml
+
 module ActiveSyncDefs {
 
   /** Map between code page number and namespace name */
   namespaces = [
-  //(0x00,"AirSync"),
+    (0x00,"AirSync"),
     (0x01,"POOMCONTACTS"),
     (0x02,"POOMMAIL"),
     (0x03,"AirNotify"), //no longer used
@@ -32,30 +34,30 @@ module ActiveSyncDefs {
 
   /** List of maps between tag names and codes for each code page */
   tag_code_space = [
-    (0,[(0x05,"Synchronize"),
-        (0x06,"Replies"), //Responses
+    (0,[(0x05,"Sync"),
+        (0x06,"Responses"), //Responses
         (0x07,"Add"),
-        (0x08,"Modify"), //Change
-        (0x09,"Remove"), //Delete
+        (0x08,"Change"), //Change
+        (0x09,"Delete"), //Delete
         (0x0a,"Fetch"),
         (0x0b,"SyncKey"),
-        (0x0c,"ClientEntryId"), //ClientId
-        (0x0d,"ServerEntryId"), //ServerId
+        (0x0c,"ClientId"), //ClientId
+        (0x0d,"ServerId"), //ServerId
         (0x0e,"Status"),
-        (0x0f,"Folder"), //collection
-        (0x10,"FolderType"), //class
+        (0x0f,"Collection"), //collection
+        (0x10,"Class"), //class
         (0x11,"Version"),
-        (0x12,"FolderId"), //CollectionId
+        (0x12,"CollectionId"), //CollectionId
         (0x13,"GetChanges"),
         (0x14,"MoreAvailable"),
         (0x15,"WindowSize"), //WindowSize
-        (0x16,"Perform"), //Commands
+        (0x16,"Commands"), //Commands
         (0x17,"Options"),
         (0x18,"FilterType"),
         (0x19,"Truncation"), //2.0 and 2.5
         (0x1a,"RtfTruncation"), //2.0 and 2.5
         (0x1b,"Conflict"),
-        (0x1c,"Folders"), //Collections
+        (0x1c,"Collections"), //Collections
         (0x1d,"Data"),
         (0x1e,"DeletesAsMoves"),
         (0x1f,"NotifyGUID"), //2.0 and 2.5
@@ -196,7 +198,7 @@ module ActiveSyncDefs {
         (0x09,"DeviceInfo"),
         (0x0a,"Enable"),
         (0x0b,"Folder"),
-        (0x0c,"ServerEntryId"),
+        (0x0c,"ServerId"),
         (0x0d,"DeviceAddress"),
         (0x0e,"ValidCarrierProfiles"),
         (0x0f,"CarrierProfile"),
@@ -287,7 +289,7 @@ module ActiveSyncDefs {
     (7,[(0x05,"Folders"), //2.0
         (0x06,"Folder"), //2.0
         (0x07,"DisplayName"),
-        (0x08,"ServerEntryId"), //ServerId
+        (0x08,"ServerId"), //ServerId
         (0x09,"ParentId"),
         (0x0a,"Type"),
         (0x0b,"Response"), //2.0
@@ -401,7 +403,7 @@ module ActiveSyncDefs {
           (0x08,"LifeTime"), //HeartbeatInterval
           (0x09,"Folders"),
           (0x0a,"Folder"),
-          (0x0b,"ServerEntryId"), //Id
+          (0x0b,"ServerId"), //Id
           (0x0c,"FolderType"), //Class
           (0x0d,"MaxFolders"),
           (0x0e,"Version") //not defined in 20100501
@@ -547,7 +549,7 @@ module ActiveSyncDefs {
            (0x13,"BodyType"), //12.0, 12.1 and 14.0
            (0x14,"DevicePassword"), //12.0, 12.1 and 14.0
            (0x15,"Password"), //12.0, 12.1 and 14.0
-           (0x16,"DeviceInformaton"), //12.0, 12.1 and 14.0
+           (0x16,"DeviceInformation"), //12.0, 12.1 and 14.0
            (0x17,"Model"), //12.0, 12.1 and 14.0
            (0x18,"IMEI"), //12.0, 12.1 and 14.0
            (0x19,"FriendlyName"), //12.0, 12.1 and 14.0
@@ -611,7 +613,7 @@ module ActiveSyncDefs {
            (0x0D,"ItemId"),
            (0x0E,"LongId"),
            (0x0F,"InstanceId"),
-           (0x10,"MIME"),
+           (0x10,"Mime"),
            (0x11,"ClientId"),
            (0x12,"Status"),
            (0x13,"AccountId"), // first in 20100501 post 14.0

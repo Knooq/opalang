@@ -34,7 +34,9 @@ type Apigen.content =
  or {xmlns xmlns}
  or {xhtml xhtml}
  or {string plain}
+ or {binary binary}
  or {(string,string) unknown}
+ or {(string,binary) unknown_binary}
  or {none}
 
 type Apigen.failure =
@@ -73,6 +75,7 @@ type ApigenLib.general_value =
 type ApigenLib.simple_seq = list((string,ApigenLib.general_value))
 
 private (binary -> string) bindump = %% BslPervasives.bindump %%
+private (string -> string) memdump = %% BslPervasives.memdump %%
 
 module ApigenOauth(OAuth.parameters params) {
 
@@ -133,6 +136,7 @@ module ApigenLib {
     case ~{user, password}:
       auth = Crypto.Base64.encode(binary_of_string("{user}:{password}"))
       {http_options with custom_headers:List.append(http_options.custom_headers,["Authorization: Basic {auth}"])};
+      //{http_options with headers:List.append(http_options.headers,[("Authorization","Basic {auth}")])};
     default: http_options;
     }
   }
@@ -201,14 +205,17 @@ module ApigenLib {
    */
   function POST_GENERIC(string base, string path, list((string,string)) options,
                         ApigenLib.auth auth, WebClient.Post.options(string) http_options, parse_fun) {
+                        //ApigenLib.auth auth, WebClient.options(binary) http_options, parse_fun) {
     //API_libs_private.apijlog("POST {base}{path}\n{http_options.content}\n")
     final_path = generic_build_path("{base}{path}", options)
     match (Uri.of_string(final_path)) {
     case {none}: {failure:{bad_path:final_path}};
     case {some:uri}:
+      //http_options = {http_options with method:"POST"}
       http_options = authentication(http_options, auth)
-jlog("uri:{uri}\nhttp_options:{{http_options with content:"Binary"}}")
+jlog("uri:{uri}\nhttp_options:{{http_options with content:none}}")
       match (WebClient.Post.try_post_with_options(uri,http_options)) {
+      //match (WebClient.request(uri,http_options)) {
       case {success:res}: jlog("res:{{res with content:"Binary"}}"); parse_fun(res)
       case {failure:f}: {failure:{network:f}}
       }
@@ -220,6 +227,7 @@ jlog("uri:{uri}\nhttp_options:{{http_options with content:"Binary"}}")
    */
   function POST(base, path, options, content, auth, parse_fun) {
     POST_GENERIC(base, path, options, auth, {WebClient.Post.default_options with content:{some:content}}, parse_fun)
+    //POST_GENERIC(base, path, options, auth, {WebClient.default_options with content:{some:content}}, parse_fun)
   }
 
   /**
@@ -228,6 +236,8 @@ jlog("uri:{uri}\nhttp_options:{{http_options with content:"Binary"}}")
   function POST_FORM(base, path, options, data, auth, parse_fun) {
     content = API_libs.form_urlencode(data)
     POST_GENERIC(base, path, options, auth, {WebClient.Post.default_options with content:{some:content}}, parse_fun)
+    //content = binary_of_string(API_libs.form_urlencode(data))
+    //POST_GENERIC(base, path, options, auth, {WebClient.default_options with content:{some:content}}, parse_fun)
   }
 
   /**
@@ -236,6 +246,9 @@ jlog("uri:{uri}\nhttp_options:{{http_options with content:"Binary"}}")
   function POST_XML(base, path, options, auth, custom_headers, xmlns, parse_fun) {
     http_options = {WebClient.Post.default_options with mimetype:"text/xml", ~custom_headers, content:{some:xmlns}}
     POST_GENERIC(base, path, options, auth, http_options, parse_fun)
+    //headers = [("Content-Type","text/xml")|custom_headers]
+    //http_options = {WebClient.default_options with ~headers, content:{some:xmlns}}
+    //POST_GENERIC(base, path, options, auth, http_options, parse_fun)
   }
 
   /**
@@ -246,6 +259,9 @@ jlog("uri:{uri}\nhttp_options:{{http_options with content:"Binary"}}")
                                                         ~custom_headers,
                                                         content:{some:wbxml}}
     POST_GENERIC(base, path, options, auth, http_options, parse_fun)
+    //headers = [("Content-Type","application/vnd.ms-sync.wbxml")|custom_headers]
+    //http_options = {WebClient.default_options with ~headers, content:{some:wbxml}}
+    //POST_GENERIC(base, path, options, auth, http_options, parse_fun)
   }
 
   /** Generic http operation */
@@ -446,24 +462,37 @@ jlog("uri:{uri}\nhttp_options:{{http_options with content:"Binary"}}")
     }
   }
 
-  function build_from_content_type(WebClient.success res, option(WBXml.context) context) {
+  function outcome(Apigen.content,Apigen.failure) build_from_content_type(WebClient.success(string) res,
+                                                                          option(WBXml.context) context) {
     //jlog(Ansi.print({yellow},"res:{res}"))
     content_type = Option.default("unknown/unknown",find_header("content-type",res.headers))
     match (List.map(String.trim,String.explode(";",content_type))) {
     case ["text/plain"|_]:
       {success:{plain:res.content}};
+      //{success:{plain:%%bslBinary.to_encoding%%(res.content,"binary")}};
     case ["text/html"|_]:
       {success:{xhtml:Xhtml.of_string(res.content)}};
+      //{success:{xhtml:Xhtml.of_string(%%bslBinary.to_encoding%%(res.content,"binary"))}};
     case ["text/xml"|_]:
       match (Xmlns.try_parse_document(res.content)) {
+      //match (Xmlns.try_parse_document(%%bslBinary.to_encoding%%(res.content,"binary"))) {
       case {some:xmldoc}: {success:{xmldoc:xmldoc}};
       case {none}: {failure:{bad_xml:res.content}};
+      //case {none}: {failure:{bad_xml:%%bslBinary.to_encoding%%(res.content,"binary")}};
       }
     case ["application/vnd.ms-sync.wbxml"|_]:
       match (context) {
       case {some:context}:
+//jlog("res.content:\n{memdump(res.content)}")
         match (WBXml.to_xmlns({context with debug:2}, %%bslBinary.of_encoding%%(res.content,"binary"))) {
-        case {success:(_ctxt,xmlns)}: {success:{~xmlns}};
+        //match (WBXml.to_xmlns({context with debug:2}, res.content)) {
+        case {success:(_ctxt,xmlns)}:
+          List.iter(function (header) {
+                      //jlog("header: \"{header}\"")
+                      if (String.has_prefix("x-ms-aserror:",header))
+                        jlog("x-ms-aserror: \"{Ansi.print({red},String.sub(13,String.length(header)-13,header))}\"")
+                    },res.headers)
+          {success:xmlns};
         case {~failure}: {failure:{bad_wbxml:failure}};
         }
       case {none}: {failure:{error:"No WBXml context"}};
@@ -471,6 +500,7 @@ jlog("uri:{uri}\nhttp_options:{{http_options with content:"Binary"}}")
     default:
       //jlog("content_type:\"{content_type}\"")
       {failure:{bad_content:{unknown:(content_type,res.content)}}};
+      //{failure:{bad_content:{unknown_binary:(content_type,res.content)}}};
     }
   }
 
@@ -1240,6 +1270,8 @@ function dbg(where) {
              },seq)
   }
 
+  function list(xmlns) xmlnsl(xmlns xmlns) { [xmlns] }
+
   function gettag_unknown(list(xmlns) content) { {some:content} }
 
   function gettag_value(get, list(xmlns) content) {
@@ -1250,6 +1282,7 @@ function dbg(where) {
   }
 
   gettag_string = gettag_value(some,_)
+  gettag_binary = gettag_value(function (s) { {some:%%bslBinary.of_encoding%%(s,"binary")} },_)
   gettag_int = gettag_value(Int.of_string_opt,_)
   gettag_bool = gettag_value(Bool.of_string,_)
   gettag_float = gettag_value(Float.of_string_opt,_)
@@ -1271,6 +1304,7 @@ function dbg(where) {
   }
 
   function get_rec(list(xmlns) content, dflt, set) {
+    //jlog("get_rec: content={String.concat("\n",List.map(Xmlns.to_string,content))}")
     List.fold(function (xmlns, record) {
                 match (record) {
                 case {some:record}:
@@ -1307,9 +1341,13 @@ function dbg(where) {
     aux(content)
   }
 
-  function get_list(list(xmlns) content, get) { {some:List.filter_map(function (xmlns) { get([xmlns]) },content)} }
+  function get_list(list(xmlns) content, get) {
+    //jlog("get_list: content={String.concat("\n",List.map(Xmlns.to_string,content))}")
+    {some:List.filter_map(function (xmlns) { get([xmlns]) },content)}
+  }
 
   function dorec(r, get, set, content) {
+    //jlog("dorec: content={String.concat("\n",List.map(Xmlns.to_string,content))}")
     match (get(content)) {
     case {some:value}: {some:set(r, value)};
     case {none}: none;

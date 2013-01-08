@@ -1,5 +1,5 @@
 /*
-     Copyright © 2011-2012 MLstate
+     Copyright © 2011-2013 MLstate
  
      This file is part of Opa.
  
@@ -21,7 +21,7 @@ import stdlib.core.wbxml
 import stdlib.io.socket
 import stdlib.apis.common
 import stdlib.apis.apigenlib
-import stdlib.apis.activesync
+import stdlib.apis.activesync // Remove for compiler
 ALX = ApigenLibXml
 type AS.SPDT = {
   int ServerId,
@@ -32,12 +32,86 @@ type AS.SPDT = {
 
 type AS.Changes = {list(AS.AddUpdateDelete) Changes}
 
+type AS.AirSyncBase_Body = {
+  int Type,
+  int EstimatedDataSize,
+  int Truncated,
+  string Data
+}
+
+type AS.Category = {string Category}
+
+type AS.CommandsAdd = {
+  string ServerId,
+  list(AS.Data) Data,
+  string Class
+}
+
+type AS.CommandsDelete = {
+  string ServerId,
+  string Class
+}
+
+type AS.CommandsChange = {
+  string ServerId,
+  list(AS.Data) Data,
+  string Class
+}
+
+type AS.Commands = {list(AS.AddDeleteChange) Commands}
+
 type AS.ServerId = {int ServerId}
 
 type AS.AddUpdateDelete = 
      {AS.SPDT Add}
   or {AS.SPDT Update}
   or {AS.ServerId Delete}
+
+type AS.Flag = 
+     {string Subject}
+  or {string Status}
+  or {string FlagType}
+  or {string DateCompleted}
+  or {string CompleteTime}
+  or {string StartDate}
+  or {string DueDate}
+  or {string UtcStartDate}
+  or {string UtcDueDate}
+  or {string ReminderSet}
+  or {string ReminderTime}
+  or {string OrdinalDate}
+  or {string SubOrdinalDate}
+
+type AS.Data = 
+     {string To}
+  or {string From}
+  or {string Subject}
+  or {string DateReceived}
+  or {string DisplayTo}
+  or {string ThreadTopic}
+  or {int Importance}
+  or {int Read}
+  or {AS.AirSyncBase_Body Body}
+  or {string MessageClass}
+  or {string InternetCPID}
+  or {list(AS.Flag) Flag}
+  or {string ContentClass}
+  or {int NativeBodyType}
+  or {binary ConversationId}
+  or {binary ConversationIndex}
+  or {list(AS.Category) Categories}
+
+type AS.AddDeleteChange = 
+     {AS.CommandsAdd Add}
+  or {AS.CommandsDelete Delete}
+  or {AS.CommandsChange Change}
+
+type AS.getitemestimate_options = {
+  string User,
+  string DeviceType,
+  string DeviceId,
+  string Cmd
+}
 
 type AS.sync_options = {
   string User,
@@ -76,13 +150,27 @@ type AS.foldersync_options = {
 
 type AS.autodiscover_options = {}
 
+type AS.BodyPreference = {
+  option(int) preview,
+  option(int) truncationsize,
+  option(int) allornone,
+  int typ
+}
+type AS.Options = {option(AS.BodyPreference) bodypreference}
 module AS {
 
+  AS.getitemestimate_options getitemestimate_default = {User:"", DeviceType:"", DeviceId:"", Cmd:""}
   AS.sync_options sync_default = {User:"", DeviceType:"", DeviceId:"", Cmd:""}
   AS.sendmail_options sendmail_default = {User:"", DeviceType:"", DeviceId:"", Cmd:""}
   AS.provision_with_key_options provision_with_key_default = {User:"", DeviceType:"", DeviceId:"", Cmd:""}
   AS.provision_options provision_default = {User:"", DeviceType:"", DeviceId:"", Cmd:""}
   AS.foldersync_options foldersync_default = {User:"", DeviceType:"", DeviceId:"", Cmd:""}
+  AS.BodyPreference BodyPreference_default = {preview:none, truncationsize:none, allornone:none, typ:0}
+  AS.Options Options_default = {bodypreference:none}
+  function getitemestimate_options(AS.getitemestimate_options options) {
+    ApigenLib.params([{sreq:("User",options.User)},{sreq:("DeviceType",options.DeviceType)},{sreq:("DeviceId",options.DeviceId)},{sreq:("Cmd",options.Cmd)}])
+  }
+
   function sync_options(AS.sync_options options) {
     ApigenLib.params([{sreq:("User",options.User)},{sreq:("DeviceType",options.DeviceType)},{sreq:("DeviceId",options.DeviceId)},{sreq:("Cmd",options.Cmd)}])
   }
@@ -115,6 +203,42 @@ module AS {
      ALX.dorec(r,ApigenLibXml.get_list(_,gettag_AddUpdateDelete),function (AS.Changes r,list(AS.AddUpdateDelete) Changes) {~{r with Changes}},content)
  case _: none
  }})
+  gettag_AirSyncBase_Body = ALX.get_rec(_,{Type:0, EstimatedDataSize:0, Truncated:0, Data:""},function (tag,r,content) {match (tag) {
+ case "Type": ALX.dorec(r,ALX.gettag_int,function (AS.AirSyncBase_Body r,int Type) {~{r with Type}},content)
+ case "EstimatedDataSize":
+     ALX.dorec(r,ALX.gettag_int,function (AS.AirSyncBase_Body r,int EstimatedDataSize) {~{r with EstimatedDataSize}},content)
+ case "Truncated": ALX.dorec(r,ALX.gettag_int,function (AS.AirSyncBase_Body r,int Truncated) {~{r with Truncated}},content)
+ case "Data": ALX.dorec(r,ALX.gettag_string,function (AS.AirSyncBase_Body r,string Data) {~{r with Data}},content)
+ case _: none
+ }})
+  gettag_Category = ALX.get_rec(_,{Category:""},function (tag,r,content) {match (tag) {
+ case "Category": ALX.dorec(r,ALX.gettag_string,function (AS.Category r,string Category) {~{r with Category}},content)
+ case _: none
+ }})
+  gettag_CommandsAdd = ALX.get_rec(_,{ServerId:"", Data:[], Class:""},function (tag,r,content) {match (tag) {
+ case "ServerId": ALX.dorec(r,ALX.gettag_string,function (AS.CommandsAdd r,string ServerId) {~{r with ServerId}},content)
+ case "Data": ALX.dorec(r,ApigenLibXml.get_list(_,gettag_Data),function (AS.CommandsAdd r,list(AS.Data) Data) {~{r with Data}},content)
+ case "Class": ALX.dorec(r,ALX.gettag_string,function (AS.CommandsAdd r,string Class) {~{r with Class}},content)
+ case _: none
+ }})
+  gettag_CommandsDelete = ALX.get_rec(_,{ServerId:"", Class:""},function (tag,r,content) {match (tag) {
+ case "ServerId": ALX.dorec(r,ALX.gettag_string,function (AS.CommandsDelete r,string ServerId) {~{r with ServerId}},content)
+ case "Class": ALX.dorec(r,ALX.gettag_string,function (AS.CommandsDelete r,string Class) {~{r with Class}},content)
+ case _: none
+ }})
+  gettag_CommandsChange = ALX.get_rec(_,{ServerId:"", Data:[], Class:""},function (tag,r,content) {match (tag) {
+ case "ServerId": ALX.dorec(r,ALX.gettag_string,function (AS.CommandsChange r,string ServerId) {~{r with ServerId}},content)
+ case "Data":
+     ALX.dorec(r,ApigenLibXml.get_list(_,gettag_Data),function (AS.CommandsChange r,list(AS.Data) Data) {~{r with Data}},content)
+ case "Class": ALX.dorec(r,ALX.gettag_string,function (AS.CommandsChange r,string Class) {~{r with Class}},content)
+ case _: none
+ }})
+  gettag_Commands = ALX.get_rec(_,{Commands:[]},function (tag,r,content) {match (tag) {
+ case "Commands":
+     ALX.dorec(r,ApigenLibXml.get_list(_,gettag_AddDeleteChange),
+     function (AS.Commands r,list(AS.AddDeleteChange) Commands) {~{r with Commands}},content)
+ case _: none
+ }})
   gettag_ServerId = ALX.get_alt(_,function (tag,content) {match (tag) {
  case "ServerId": ALX.doalt(ALX.gettag_int,function (int ServerId) {{~ServerId}},content)
  case _: none
@@ -125,65 +249,171 @@ module AS {
  case "Delete": ALX.doalt(gettag_ServerId,function (AS.ServerId Delete) {{~Delete}},content)
  case _: none
  }})
+  gettag_Flag = ALX.get_alt(_,function (tag,content) {match (tag) {
+ case "Subject": ALX.doalt(ALX.gettag_string,function (string Subject) {{~Subject}},content)
+ case "Status": ALX.doalt(ALX.gettag_string,function (string Status) {{~Status}},content)
+ case "FlagType": ALX.doalt(ALX.gettag_string,function (string FlagType) {{~FlagType}},content)
+ case "DateCompleted": ALX.doalt(ALX.gettag_string,function (string DateCompleted) {{~DateCompleted}},content)
+ case "CompleteTime": ALX.doalt(ALX.gettag_string,function (string CompleteTime) {{~CompleteTime}},content)
+ case "StartDate": ALX.doalt(ALX.gettag_string,function (string StartDate) {{~StartDate}},content)
+ case "DueDate": ALX.doalt(ALX.gettag_string,function (string DueDate) {{~DueDate}},content)
+ case "UtcStartDate": ALX.doalt(ALX.gettag_string,function (string UtcStartDate) {{~UtcStartDate}},content)
+ case "UtcDueDate": ALX.doalt(ALX.gettag_string,function (string UtcDueDate) {{~UtcDueDate}},content)
+ case "ReminderSet": ALX.doalt(ALX.gettag_string,function (string ReminderSet) {{~ReminderSet}},content)
+ case "ReminderTime": ALX.doalt(ALX.gettag_string,function (string ReminderTime) {{~ReminderTime}},content)
+ case "OrdinalDate": ALX.doalt(ALX.gettag_string,function (string OrdinalDate) {{~OrdinalDate}},content)
+ case "SubOrdinalDate": ALX.doalt(ALX.gettag_string,function (string SubOrdinalDate) {{~SubOrdinalDate}},content)
+ case _: none
+ }})
+  gettag_Data = ALX.get_alt(_,function (tag,content) {match (tag) {
+ case "To": ALX.doalt(ALX.gettag_string,function (string To) {{~To}},content)
+ case "From": ALX.doalt(ALX.gettag_string,function (string From) {{~From}},content)
+ case "Subject": ALX.doalt(ALX.gettag_string,function (string Subject) {{~Subject}},content)
+ case "DateReceived": ALX.doalt(ALX.gettag_string,function (string DateReceived) {{~DateReceived}},content)
+ case "DisplayTo": ALX.doalt(ALX.gettag_string,function (string DisplayTo) {{~DisplayTo}},content)
+ case "ThreadTopic": ALX.doalt(ALX.gettag_string,function (string ThreadTopic) {{~ThreadTopic}},content)
+ case "Importance": ALX.doalt(ALX.gettag_int,function (int Importance) {{~Importance}},content)
+ case "Read": ALX.doalt(ALX.gettag_int,function (int Read) {{~Read}},content)
+ case "Body": ALX.doalt(gettag_AirSyncBase_Body,function (AS.AirSyncBase_Body Body) {{~Body}},content)
+ case "MessageClass": ALX.doalt(ALX.gettag_string,function (string MessageClass) {{~MessageClass}},content)
+ case "InternetCPID": ALX.doalt(ALX.gettag_string,function (string InternetCPID) {{~InternetCPID}},content)
+ case "Flag": ALX.doalt(ApigenLibXml.get_list(_,gettag_Flag),function (list(AS.Flag) Flag) {{~Flag}},content)
+ case "ContentClass": ALX.doalt(ALX.gettag_string,function (string ContentClass) {{~ContentClass}},content)
+ case "NativeBodyType": ALX.doalt(ALX.gettag_int,function (int NativeBodyType) {{~NativeBodyType}},content)
+ case "ConversationId": ALX.doalt(ALX.gettag_binary,function (binary ConversationId) {{~ConversationId}},content)
+ case "ConversationIndex": ALX.doalt(ALX.gettag_binary,function (binary ConversationIndex) {{~ConversationIndex}},content)
+ case "Categories": ALX.doalt(ApigenLibXml.get_list(_,gettag_Category),function (list(AS.Category) Categories) {{~Categories}},content)
+ case _: none
+ }})
+  gettag_AddDeleteChange = ALX.get_alt(_,function (tag,content) {match (tag) {
+ case "Add": ALX.doalt(gettag_CommandsAdd,function (AS.CommandsAdd Add) {{~Add}},content)
+ case "Delete": ALX.doalt(gettag_CommandsDelete,function (AS.CommandsDelete Delete) {{~Delete}},content)
+ case "Change": ALX.doalt(gettag_CommandsChange,function (AS.CommandsChange Change) {{~Change}},content)
+ case _: none
+ }})
   
-  function outcome(string,string) pack_Sync(int collection_id,int synckey) {
-    msg = xmlns @unsafe_cast(
-<Sync xmlns="AirSync"><Collections><Collection><SyncKey>{synckey}</SyncKey><CollectionId>{collection_id}</CollectionId><GetChanges/><DeletesAsMoves/></Collection></Collections></Sync>
+  function xmlns xmlns_GetItemEstimate(string collection_id,string synckey) {
+    xmlns @unsafe_cast(
+<GetItemEstimate xmlns="GetItemEstimate" xmlns:airsync="AirSync"><Collections><Collection><airsync:SyncKey>{synckey}</airsync:SyncKey><CollectionId>{collection_id}</CollectionId><airsync:Options><airsync:FilterType>0</airsync:FilterType><airsync:Class>Email</airsync:Class></airsync:Options></Collection></Collections></GetItemEstimate>
 )
-    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:2},msg,183))
+  }
+
+  function outcome(string,string) pack_GetItemEstimate(string collection_id,string synckey) {
+    msg = xmlns_GetItemEstimate(collection_id,synckey)
+    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:2},msg,336))
   }
 
   
-  function outcome(string,string) pack_SendMail(string mime,string _client_id) {
-    msg = xmlns @unsafe_cast(
-//XMLPARAM account_id option(string)
-//XMLPARAM save_in_sent_items bool
-<SendMail xmlns="ComposeMail:"><ClientId>123456789</ClientId><Mime>{mime}</Mime></SendMail>
+  function xmlns xmlns_Sync(option(AS.Options) syncoptions,option(int) deletesasmoves,bool getchanges,string collection_id,string synckey) {
+    xmlns @unsafe_cast(
+<Sync xmlns="AirSync"><Collections><Collection><SyncKey>{synckey}</SyncKey><CollectionId>{collection_id}</CollectionId>{ALX.make_simple_sequence("",match (deletesasmoves) { case {some:deletesasmoves}: [("DeletesAsMoves",{Int:deletesasmoves})]; case {none}: []; })}{ALX.make_simple_sequence("",if (getchanges) [("GetChanges",{Empty})] else [])}{match (syncoptions) { case {some:(~{bodypreference})}: ALX.xmlnsl(xmlns_Options(bodypreference)); case {none}: []; } }</Collection></Collections></Sync>
 )
-    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:2},msg,163))
+  }
+
+  function outcome(string,string) pack_Sync(option(AS.Options) syncoptions,option(int) deletesasmoves,bool getchanges,string collection_id,string synckey) {
+    msg = xmlns_Sync(syncoptions,deletesasmoves,getchanges,collection_id,synckey)
+    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:2},msg,496))
   }
 
   
-  function outcome(string,string) pack_ProvisionWithKey(int status,int policy_key) {
-    msg = xmlns @unsafe_cast(
+  function xmlns xmlns_SendMail(string mime,bool save_in_sent_items,option(string) account_id,string client_id) {
+    xmlns @unsafe_cast(
+<SendMail xmlns="ComposeMail"><ClientId>{client_id}</ClientId>{ALX.make_simple_sequence("",match (account_id) { case {some:account_id}: [("AccountId",{String:account_id})]; case {none}: []; })}{ALX.make_simple_sequence("",if (save_in_sent_items) [("SaveInSentItems",{Empty})] else [])}<Mime><Opaque>{mime}</Opaque></Mime></SendMail>
+)
+  }
+
+  function outcome(string,string) pack_SendMail(string mime,bool save_in_sent_items,option(string) account_id,string client_id) {
+    msg = xmlns_SendMail(mime,save_in_sent_items,account_id,client_id)
+    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:2},msg,332))
+  }
+
+  
+  function xmlns xmlns_ProvisionWithKey(int status,string policy_key) {
+    xmlns @unsafe_cast(
 <Provision xmlns="Provision:"><Policies><Policy><PolicyType>MS-EAS-Provisioning-WBXML</PolicyType><PolicyKey>{policy_key}</PolicyKey><Status>{status}</Status></Policy></Policies></Provision>
 )
+  }
+
+  function outcome(string,string) pack_ProvisionWithKey(int status,string policy_key) {
+    msg = xmlns_ProvisionWithKey(status,policy_key)
     Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:2},msg,190))
   }
 
   
-  function outcome(string,string) pack_Provision(ApigenLib.simple_seq params) {
-    msg = xmlns @unsafe_cast(
+  function xmlns xmlns_Provision(ApigenLib.simple_seq params) {
+    xmlns @unsafe_cast(
 <Provision xmlns="Provision:" xmlns:settings="Settings:"><settings:DeviceInformation><settings:Set>{ApigenLibXml.make_simple_sequence("settings",params)}</settings:Set></settings:DeviceInformation><Policies><Policy><PolicyType>MS-EAS-Provisioning-WBXML</PolicyType></Policy></Policies></Provision>
 )
+  }
+
+  function outcome(string,string) pack_Provision(ApigenLib.simple_seq params) {
+    msg = xmlns_Provision(params)
     Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:2},msg,297))
   }
 
   
-  function outcome(string,string) pack_FolderSync(int key) {
-    msg = xmlns @unsafe_cast(
-<FolderSync xmlns="FolderHierarchy"><SyncKey>{key}</SyncKey></FolderSync>
+  function xmlns xmlns_FolderSync(string synckey) {
+    xmlns @unsafe_cast(
+<FolderSync xmlns="FolderHierarchy"><SyncKey>{synckey}</SyncKey></FolderSync>
 )
-    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:2},msg,73))
+  }
+
+  function outcome(string,string) pack_FolderSync(string synckey) {
+    msg = xmlns_FolderSync(synckey)
+    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:2},msg,77))
   }
 
   
-  function outcome(string,string) pack_Autodiscover(string email) {
-    msg = xmlns @unsafe_cast(
-<Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/outlook/requestschema/2006">
-  <Request>
-    <EMailAddress>{email}</EMailAddress>
-    <AcceptableResponseSchema>http://schemas.microsoft.com/exchange/autodiscover/outlook/responseschema/2006a</AcceptableResponseSchema>
-  </Request>
-</Autodiscover>
+  function xmlns xmlns_Autodiscover(string email) {
+    xmlns @unsafe_cast(
+<Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/outlook/requestschema/2006"><Request><EMailAddress>{email}</EMailAddress><AcceptableResponseSchema>http://schemas.microsoft.com/exchange/autodiscover/outlook/responseschema/2006a</AcceptableResponseSchema></Request></Autodiscover>
 )
+  }
+
+  function outcome(string,string) pack_Autodiscover(string email) {
+    msg = xmlns_Autodiscover(email)
     {success:"<?xml version=\"1.0\"?>\n"^Xmlns.to_string(msg)}
   }
 
-  function sync(AS.sync_options options,string endpoint,ApigenLib.auth auth,list(string) headers,int collection_id,int synckey) {
+  
+  function xmlns xmlns_Options(option(AS.BodyPreference) bodypreference) {
+    xmlns @unsafe_cast(
+<Options>{match (bodypreference) { case {some:(~{preview,truncationsize,allornone,typ})}: ALX.xmlnsl(xmlns_BodyPreference(preview,truncationsize,allornone,typ)); case {none}: []; } }</Options>
+)
+  }
+
+  function outcome(string,string) pack_Options(option(AS.BodyPreference) bodypreference) {
+    msg = xmlns_Options(bodypreference)
+    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:2},msg,192))
+  }
+
+  
+  function xmlns xmlns_BodyPreference(option(int) preview,option(int) truncationsize,option(int) allornone,int typ) {
+    xmlns @unsafe_cast(
+<AirSyncBase:BodyPreference><AirSyncBase:Type>{typ}</AirSyncBase:Type>{ALX.make_simple_sequence("AirSyncBase",match (truncationsize) { case {some:truncationsize}: [("TruncationSize",{Int:truncationsize})]; case {none}: []; })}{ALX.make_simple_sequence("AirSyncBase",match (allornone) { case {some:allornone}: [("AllOrNone",{Int:allornone})]; case {none}: []; })}{ALX.make_simple_sequence("AirSyncBase",match (preview) { case {some:preview}: [("Preview",{Int:preview})]; case {none}: []; })}</AirSyncBase:BodyPreference>
+)
+  }
+
+  function outcome(string,string) pack_BodyPreference(option(int) preview,option(int) truncationsize,option(int) allornone,int typ) {
+    msg = xmlns_BodyPreference(preview,truncationsize,allornone,typ)
+    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:2},msg,519))
+  }
+
+  function getitemestimate(AS.getitemestimate_options options,string endpoint,ApigenLib.auth auth,list(string) headers,string collection_id,string synckey) {
+    path = "/Microsoft-Server-ActiveSync"
+    options = getitemestimate_options(options)
+    content = pack_GetItemEstimate(collection_id,synckey)
+    match (content) {
+    case {success:content}:
+        ApigenLib.POST_WBXML(endpoint,path,options,auth,headers,content,ApigenLib.build_from_content_type(_,some(ActiveSyncDefs.context)))
+    case {~failure}: {failure:{pack:failure}}
+    }
+  }
+
+  function sync(AS.sync_options options,string endpoint,ApigenLib.auth auth,list(string) headers,option(AS.Options) syncoptions,option(int) deletesasmoves,bool getchanges,string collection_id,string synckey) {
     path = "/Microsoft-Server-ActiveSync"
     options = sync_options(options)
-    content = pack_Sync(collection_id,synckey)
+    content = pack_Sync(syncoptions,deletesasmoves,getchanges,collection_id,synckey)
     match (content) {
     case {success:content}:
         ApigenLib.POST_WBXML(endpoint,path,options,auth,headers,content,ApigenLib.build_from_content_type(_,some(ActiveSyncDefs.context)))
@@ -191,10 +421,10 @@ module AS {
     }
   }
 
-  function sendmail(AS.sendmail_options options,string endpoint,ApigenLib.auth auth,list(string) headers,string mime,string _client_id) {
+  function sendmail(AS.sendmail_options options,string endpoint,ApigenLib.auth auth,list(string) headers,string mime,bool save_in_sent_items,option(string) account_id,string client_id) {
     path = "/Microsoft-Server-ActiveSync"
     options = sendmail_options(options)
-    content = pack_SendMail(mime,_client_id)
+    content = pack_SendMail(mime,save_in_sent_items,account_id,client_id)
     match (content) {
     case {success:content}:
         ApigenLib.POST_WBXML(endpoint,path,options,auth,headers,content,ApigenLib.build_from_content_type(_,some(ActiveSyncDefs.context)))
@@ -202,7 +432,7 @@ module AS {
     }
   }
 
-  function provision_with_key(AS.provision_with_key_options options,string endpoint,ApigenLib.auth auth,list(string) headers,int status,int policy_key) {
+  function provision_with_key(AS.provision_with_key_options options,string endpoint,ApigenLib.auth auth,list(string) headers,int status,string policy_key) {
     path = "/Microsoft-Server-ActiveSync"
     options = provision_with_key_options(options)
     content = pack_ProvisionWithKey(status,policy_key)
@@ -224,10 +454,10 @@ module AS {
     }
   }
 
-  function foldersync(AS.foldersync_options options,string endpoint,ApigenLib.auth auth,list(string) headers,int key) {
+  function foldersync(AS.foldersync_options options,string endpoint,ApigenLib.auth auth,list(string) headers,string synckey) {
     path = "/Microsoft-Server-ActiveSync"
     options = foldersync_options(options)
-    content = pack_FolderSync(key)
+    content = pack_FolderSync(synckey)
     match (content) {
     case {success:content}:
         ApigenLib.POST_WBXML(endpoint,path,options,auth,headers,content,ApigenLib.build_from_content_type(_,some(ActiveSyncDefs.context)))

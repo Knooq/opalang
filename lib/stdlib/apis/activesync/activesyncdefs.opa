@@ -6,18 +6,18 @@ module ActiveSyncDefs {
   /** Map between code page number and namespace name */
   namespaces = [
     (0x00,"AirSync"),
-    (0x01,"POOMCONTACTS"),
-    (0x02,"POOMMAIL"),
+    (0x01,"Contacts"),
+    (0x02,"Email"),
     (0x03,"AirNotify"), //no longer used
-    (0x04,"POOMCAL"),
+    (0x04,"Calendar"),
     (0x05,"Move"),
     (0x06,"GetItemEstimate"),
     (0x07,"FolderHierarchy"),
     (0x08,"MeetingResponse"),
-    (0x09,"POOMTASKS"),
+    (0x09,"Tasks"),
     (0x0A,"ResolveRecipients"),
-    (0x0B,"ValidateCerts"),
-    (0x0C,"POOMCONTACTS2"),
+    (0x0B,"ValidateCert"),
+    (0x0C,"Contacts2"),
     (0x0D,"Ping"),
     (0x0E,"Provision"),
     (0x0F,"Search"),
@@ -27,7 +27,7 @@ module ActiveSyncDefs {
     (0x13,"DocumentLibrary"), //12.0, 12.1 and 14.0
     (0x14,"ItemOperations"), //12.0, 12.1 and 14.0
     (0x15,"ComposeMail"), //14.0
-    (0x16,"POOMMAIL2"), //14.0
+    (0x16,"Email2"), //14.0
     (0x17,"Notes"), //14.0
     (0x18,"RightsManagement")
   ]
@@ -35,29 +35,29 @@ module ActiveSyncDefs {
   /** List of maps between tag names and codes for each code page */
   tag_code_space = [
     (0,[(0x05,"Sync"),
-        (0x06,"Responses"), //Responses
+        (0x06,"Responses"),
         (0x07,"Add"),
-        (0x08,"Change"), //Change
-        (0x09,"Delete"), //Delete
+        (0x08,"Change"),
+        (0x09,"Delete"),
         (0x0a,"Fetch"),
         (0x0b,"SyncKey"),
-        (0x0c,"ClientId"), //ClientId
-        (0x0d,"ServerId"), //ServerId
+        (0x0c,"ClientId"),
+        (0x0d,"ServerId"),
         (0x0e,"Status"),
-        (0x0f,"Collection"), //collection
-        (0x10,"Class"), //class
+        (0x0f,"Collection"),
+        (0x10,"Class"),
         (0x11,"Version"),
-        (0x12,"CollectionId"), //CollectionId
+        (0x12,"CollectionId"),
         (0x13,"GetChanges"),
         (0x14,"MoreAvailable"),
-        (0x15,"WindowSize"), //WindowSize
-        (0x16,"Commands"), //Commands
+        (0x15,"WindowSize"),
+        (0x16,"Commands"),
         (0x17,"Options"),
         (0x18,"FilterType"),
         (0x19,"Truncation"), //2.0 and 2.5
         (0x1a,"RtfTruncation"), //2.0 and 2.5
         (0x1b,"Conflict"),
-        (0x1c,"Collections"), //Collections
+        (0x1c,"Collections"),
         (0x1d,"Data"),
         (0x1e,"DeletesAsMoves"),
         (0x1f,"NotifyGUID"), //2.0 and 2.5
@@ -74,7 +74,7 @@ module ActiveSyncDefs {
        ]),
     (1,[(0x05,"Anniversary"),
         (0x06,"AssistantName"),
-        (0x07,"AssistnamePhoneNumber"), //AssistantTelephoneNumber
+        (0x07,"AssistantPhoneNumber"),
         (0x08,"Birthday"),
         (0x09,"Body"), // 2.5, but is in code page 17 in ActiveSync versions 12.0, 12.1, and 14.0.
         (0x0a,"BodySize"), //2.0 and 2.5
@@ -277,10 +277,10 @@ module ActiveSyncDefs {
     ]),
     (6,[(0x05,"GetItemEstimate"),
         (0x06,"Version"), //only 12.1 20100501
-        (0x07,"Folders"), //Collections
-        (0x08,"Folder"), //Collection
-        (0x09,"FolderType"),   //Class //only 12.1 //The <Class> tag defined in code page 0 should be used in all other instances. 20100501
-        (0x0a,"FolderId"), //CollectionId
+        (0x07,"Collections"),
+        (0x08,"Collection"),
+        (0x09,"Class"),   //only 12.1 //The <Class> tag defined in code page 0 should be used in all other instances. 20100501
+        (0x0a,"CollectionId"),
         (0x0b,"DateTime"), //not supported by 14. only supported 12.1. 20100501
         (0x0c,"Estimate"),
         (0x0d,"Response"),
@@ -289,7 +289,7 @@ module ActiveSyncDefs {
     (7,[(0x05,"Folders"), //2.0
         (0x06,"Folder"), //2.0
         (0x07,"DisplayName"),
-        (0x08,"ServerId"), //ServerId
+        (0x08,"ServerId"),
         (0x09,"ParentId"),
         (0x0a,"Type"),
         (0x0b,"Response"), //2.0

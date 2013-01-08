@@ -24,9 +24,11 @@ type ActiveSync.conn = {
   string device_id,
   ApigenLib.simple_seq device_information,
   string display_name,
-  int policy_key,
+  string policy_key,
+  stringmap(string) sync_keys,
   list(string) owaurls,
   option(AS.Changes) changes,
+  option(AS.Commands) commands,
   stringmap(xmlns) stored_xml,
   stringmap(int) stored_statuses,
   option(xml_document) autodiscover_xmldoc,
@@ -41,14 +43,15 @@ module ActiveSync {
   private get_int = ApigenLibXml.get_xml_int
 
   private all_chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-"
+  private digits = "0123456789"
   function make_device_id() { Random.generic_string("0123456789ABCDEF",32) }
   function make_imei() { Random.generic_string(all_chars,15) }
-  function make_client_id() { Random.generic_string(all_chars,40) }
+  function make_client_id() { Random.generic_string(digits,20) }
 
   function ActiveSync.conn init(string asversion, string endpoint, string user, string password, string email,
                                 string device_type, string device_id, ApigenLib.simple_seq device_information) {
     ~{ asversion, endpoint, user, password, email, device_type, device_id, device_information,
-       policy_key:0, display_name:"", owaurls:[], changes:none,
+       policy_key:"0", sync_keys:StringMap.empty, display_name:"", owaurls:[], changes:none, commands:none,
        stored_xml:StringMap.empty, stored_statuses:StringMap.empty,
        autodiscover_xmldoc:none,
        content:{none}, error:none
@@ -90,6 +93,7 @@ module ActiveSync {
       if (Option.is_some(conn.error))
         conn
       else {
+jlog("initialise: foldersync status={Ansi.print({red},"{get_status(conn,"foldersync")}")}")
         match (get_status(conn,"foldersync")) {
         case {some:1}: get_changes(conn);
         case {some:143}  // Policy refresh
@@ -146,8 +150,13 @@ module ActiveSync {
     {conn with stored_statuses:StringMap.add(name,Option.default(dflt,List.nth(0,statuses)),conn.stored_statuses)}
   }
 
+  private function store_sync_key(ActiveSync.conn conn, list(string) keys, string id) {
+    {conn with sync_keys:StringMap.add(id,Option.default("0",List.nth(0,keys)),conn.sync_keys)}
+  }
+
   function option(xmlns) get_xml(ActiveSync.conn conn, string name) { StringMap.get(name,conn.stored_xml) }
   function option(int) get_status(ActiveSync.conn conn, string name) { StringMap.get(name,conn.stored_statuses) }
+  function option(string) get_sync_key(ActiveSync.conn conn, string name) { StringMap.get(name,conn.sync_keys) }
 
   function ActiveSync.conn get_display_name(ActiveSync.conn conn) {
     match (conn.autodiscover_xmldoc) {
@@ -187,6 +196,35 @@ module ActiveSync {
     }
   }
 
+  function outcome({string collection_id,int estimate},string) get_item_estimate(ActiveSync.conn conn) {
+    match (StringMap.get("getitemestimate",conn.stored_xml)) {
+    case {some:xmlns}:
+      match ((get_string(Option.get(ApigenLibXml.parse_path("GetItemEstimate.Response.Collection.CollectionId")),xmlns),
+              get_int(Option.get(ApigenLibXml.parse_path("GetItemEstimate.Response.Collection.Estimate")),xmlns))) {
+      case ({success:[collection_id]},{success:[estimate]}): {success:~{collection_id,estimate}};
+      case ({success:_collection_ids},{success:_estimates}): {failure:"Multiple or missing collection_ids or estimates"};
+      case ({~failure},_): {~failure};
+      case (_,{~failure}): {~failure};
+      }
+    default: {failure:"ActiveSync.get_item_estimate: no getitemestimate XML"};
+    }
+  }
+
+  function ActiveSync.conn get_commands(ActiveSync.conn conn) {
+    match (StringMap.get("sync",conn.stored_xml)) {
+    case {some:xmlns}:
+      match (get_elements(Option.get(ApigenLibXml.parse_path("Sync.Collections.Collection")),xmlns)) {
+      case {success:collection}:
+        //jlog("\nget_commands: collection={String.concat("\n",List.map(Xmlns.to_string,collection))}\n")
+        option(AS.Commands) commands = AS.gettag_Commands(collection)
+        //jlog("\ncommands:{commands}\n");
+        {conn with ~commands, error:none};
+      case {~failure}: {conn with commands:none, error:{some:{error:failure}}};
+      }
+    default: {conn with commands:none, error:{some:{error:"ActiveSync.get_commands: no sync XML"}}};
+    }
+  }
+
   /** Perform the autodiscover routine.
    *
    * We don't actually go through Microsoft's ridiculous palaver to get
@@ -198,43 +236,44 @@ module ActiveSync {
     case {success:{~xmldoc}}:
       /*API_libs_private.api*/jlog("ActiveSync.autodiscover: xml=\n{Xmlns.to_string(xmldoc.element)}")
       {conn with autodiscover_xmldoc:{some:xmldoc}, error:none};
-    case {success:{~xmlns}}: {conn with error:{some:{bad_content:{~xmlns}}}};
-    case {success:{~xhtml}}: {conn with error:{some:{bad_content:{~xhtml}}}};
-    case {success:{~plain}}: {conn with error:{some:{bad_content:{~plain}}}};
+    case {success:content}: {conn with error:{some:{bad_content:content}}};
     case {~failure}: {conn with error:{some:failure}};
     }
   }
 
   private function asheaders(conn) { ["X-MS-PolicyKey: {conn.policy_key}", "MS-ASProtocolVersion: {conn.asversion}"] }
+  //private function asheaders(conn) { [("X-MS-PolicyKey",conn.policy_key), ("MS-ASProtocolVersion",conn.asversion)] }
 
   // TODO: remote wipe
   // TODO: analyse hierarchy
   function ActiveSync.conn foldersync(ActiveSync.conn conn) {
-    key = Option.default(0,StringMap.get("synckey",conn.stored_statuses))
+    sync_key = Option.default("0",StringMap.get("foldersync",conn.sync_keys))
     match (AS.foldersync({User:conn.user, DeviceType:conn.device_type, DeviceId:conn.device_id, Cmd:"FolderSync"},
-                         conn.endpoint,{user:conn.user,password:conn.password},asheaders(conn),key)) {
+                         conn.endpoint,{user:conn.user,password:conn.password},asheaders(conn),sync_key)) {
     case {success:content}:
       conn = store_xmlns(conn, content, "foldersync")
       match (content) {
       case {~xmlns}:
         conn = install(conn,"foldersync",get_int,"FolderSync.Status",store_status(_,_,"foldersync",-1),xmlns,1,1)
-        install(conn,"foldersync",get_int,"FolderSync.SyncKey",store_status(_,_,"synckey",0),xmlns,0,1)
+        conn = install(conn,"foldersync",get_string,"FolderSync.SyncKey",store_sync_key(_,_,"foldersync"),xmlns,0,1)
+        conn;
       default: conn;
       }
     case {~failure}: {conn with error:{some:failure}};
     }
   }
 
-  private function provision_(conn, res) {
+  private function provision_(conn, name, res) {
     match (res) {
     case {success:content}:
       conn = store_xmlns(conn, content, "provision")
       match (content) {
       case {~xmlns}:
-        conn = install(conn,"provision_with_key",get_int,"Provision.Policies.Policy.Status",
+        conn = install(conn,name,get_int,"Provision.Policies.Policy.Status",
                        store_status(_,_,"provision",-1),xmlns,1,1)
-        install(conn,"provision",get_int,"Provision.Policies.Policy.PolicyKey", // <-- BEWARE: this might be 64-bit
-                function (conn, keys) { {conn with policy_key:Option.default(0,List.nth(0,keys))} },xmlns,1,1);
+        conn = install(conn,name,get_string,"Provision.Policies.Policy.PolicyKey",
+                       function (conn, keys) { {conn with policy_key:Option.default("0",List.nth(0,keys))} },xmlns,1,1);
+        conn;
       default: conn;
       }
     case {~failure}: {conn with error:{some:failure}};
@@ -242,21 +281,23 @@ module ActiveSync {
   }
 
   function ActiveSync.conn provision(ActiveSync.conn conn) {
-    provision_(conn,AS.provision({User:conn.user, DeviceType:conn.device_type, DeviceId:conn.device_id, Cmd:"Provision"},
-                                 conn.endpoint,{user:conn.user,password:conn.password},asheaders(conn),conn.device_information))
+    provision_(conn,"provision",
+               AS.provision({User:conn.user, DeviceType:conn.device_type, DeviceId:conn.device_id, Cmd:"Provision"},
+                            conn.endpoint,{user:conn.user,password:conn.password},asheaders(conn),conn.device_information))
   }
 
-  function ActiveSync.conn provision_with_key(ActiveSync.conn conn, int status, int policy_key) {
-    provision_(conn,AS.provision_with_key({User:conn.user, DeviceType:conn.device_type, DeviceId:conn.device_id, Cmd:"Provision"},
-                                          conn.endpoint,{user:conn.user,password:conn.password},
+  function ActiveSync.conn provision_with_key(ActiveSync.conn conn, int status, string policy_key) {
+    provision_(conn,"provision_with_key",
+               AS.provision_with_key({User:conn.user, DeviceType:conn.device_type, DeviceId:conn.device_id, Cmd:"Provision"},
+                                     conn.endpoint,{user:conn.user,password:conn.password},
                                           asheaders(conn),status,policy_key))
   }
 
   function ActiveSync.conn sendmail(ActiveSync.conn conn,
-                                    string mime, /*bool save_in_sent_items, option(string) account_id,*/ string client_id) {
+                                    string mime, bool save_in_sent_items, option(string) account_id, string client_id) {
     match (AS.sendmail({User:conn.user, DeviceType:conn.device_type, DeviceId:conn.device_id, Cmd:"SendMail"},
                        conn.endpoint,{user:conn.user,password:conn.password},asheaders(conn),
-                       mime,/*save_in_sent_items,account_id,*/client_id)) {
+                       mime,save_in_sent_items,account_id,client_id)) {
     case {success:content}:
       conn = store_xmlns(conn, content, "sendmail")
       match (content) {
@@ -269,16 +310,45 @@ module ActiveSync {
     }
   }
 
-  function ActiveSync.conn sync(ActiveSync.conn conn, int collection_id) {
+  // TODO: replace sync_key with boolean resync?
+  function ActiveSync.conn sync(ActiveSync.conn conn,
+                                option(AS.Options) syncoptions,
+                                option(int) deletesasmoves, bool getchanges, string collection_id, option(string) sync_key) {
+    sync_key = Option.default(Option.default("0",StringMap.get(collection_id,conn.sync_keys)),sync_key)
     match (AS.sync({User:conn.user, DeviceType:conn.device_type, DeviceId:conn.device_id, Cmd:"Sync"},
-                       conn.endpoint,{user:conn.user,password:conn.password},asheaders(conn),
-                       collection_id,0)) {
+                   conn.endpoint, {user:conn.user,password:conn.password}, asheaders(conn),
+                   syncoptions, deletesasmoves, getchanges, collection_id, sync_key)) {
     case {success:content}:
       conn = store_xmlns(conn, content, "sync")
       match (content) {
-      case {~xmlns}: _ = xmlns
-        //conn = install(conn,"foldersync",get_int,"FolderSync.Status",store_status(_,_,"foldersync",-1),xmlns,1,1)
-        conn
+      case {~xmlns}:
+        match (get_string(Option.get(ApigenLibXml.parse_path("Sync.Collections.Collection.CollectionId")),xmlns)) {
+        case {success:[]}: {conn with error:{some:{error:"No CollectionId"}}};
+        case {success:[collection_id]}:
+          conn = install(conn,"sync",get_int,"Sync.Collections.Collection.Status",store_status(_,_,collection_id,-1),xmlns,1,1)
+          conn = install(conn,"sync",get_string,"Sync.Collections.Collection.SyncKey",store_sync_key(_,_,collection_id),xmlns,0,1)
+          conn;
+        case {success:collection_ids}: {conn with error:{some:{error:"Multiple CollectionIds {collection_ids}"}}};
+        case {~failure}: {conn with error:{some:{error:failure}}};
+        }
+      default: conn;
+      }
+    case {~failure}: {conn with error:{some:failure}};
+    }
+  }
+
+  function ActiveSync.conn getitemestimate(ActiveSync.conn conn, string collection_id, option(string) sync_key) {
+    sync_key = Option.default(Option.default("0",StringMap.get(collection_id,conn.sync_keys)),sync_key)
+    match (AS.getitemestimate({User:conn.user, DeviceType:conn.device_type, DeviceId:conn.device_id, Cmd:"GetItemEstimate"},
+                              conn.endpoint, {user:conn.user,password:conn.password}, asheaders(conn),
+                              collection_id, sync_key)) {
+    case {success:content}:
+      match (content) {
+      case {~xmlns}:
+        conn = store_xmlns(conn, content, "getitemestimate") // This doesn't update SyncKey
+        conn = install(conn,"getitemestimate",get_int,"GetItemEstimate.Response.Status",
+                       store_status(_,_,"getitemestimate",-1),xmlns,1,1)
+        conn;
       default: conn;
       }
     case {~failure}: {conn with error:{some:failure}};

@@ -484,7 +484,7 @@ jlog("uri:{uri}\nhttp_options:{{http_options with content:none}}")
       match (context) {
       case {some:context}:
 //jlog("res.content:\n{memdump(res.content)}")
-        match (WBXml.to_xmlns({context with debug:2}, %%bslBinary.of_encoding%%(res.content,"binary"))) {
+        match (WBXml.to_xmlns({context with debug:1}, %%bslBinary.of_encoding%%(res.content,"binary"))) {
         //match (WBXml.to_xmlns({context with debug:2}, res.content)) {
         case {success:(_ctxt,xmlns)}:
           List.iter(function (header) {
@@ -1270,9 +1270,13 @@ function dbg(where) {
              },seq)
   }
 
+  function list(xmlns) xmlnsl0() { [] }
+
   function list(xmlns) xmlnsl(xmlns xmlns) { [xmlns] }
 
   function gettag_unknown(list(xmlns) content) { {some:content} }
+
+  function gettag_label(list(xmlns) _content) { {some:{}} }
 
   function gettag_value(get, list(xmlns) content) {
     match (content) {

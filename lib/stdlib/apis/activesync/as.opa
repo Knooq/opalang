@@ -24,13 +24,13 @@ import stdlib.apis.apigenlib
 import stdlib.apis.activesync // Remove for compiler
 ALX = ApigenLibXml
 type AS.SPDT = {
-  int ServerId,
-  int ParentId,
+  string ServerId,
+  string ParentId,
   string DisplayName,
   int Type
 }
 
-type AS.Changes = {list(AS.AddUpdateDelete) Changes}
+type AS.FolderSyncChanges = {list(AS.FolderSyncChange) Changes}
 
 type AS.AirSyncBase_Body = {
   int Type,
@@ -58,12 +58,13 @@ type AS.CommandsChange = {
   string Class
 }
 
-type AS.Commands = {list(AS.AddDeleteChange) Commands}
+type AS.Commands = {list(AS.SyncCommands) Commands}
 
-type AS.ServerId = {int ServerId}
+type AS.ServerId = {string ServerId}
 
-type AS.AddUpdateDelete = 
-     {AS.SPDT Add}
+type AS.FolderSyncChange = 
+     {int Count}
+  or {AS.SPDT Add}
   or {AS.SPDT Update}
   or {AS.ServerId Delete}
 
@@ -101,10 +102,42 @@ type AS.Data =
   or {binary ConversationIndex}
   or {list(AS.Category) Categories}
 
-type AS.AddDeleteChange = 
+type AS.SyncCommands = 
      {AS.CommandsAdd Add}
   or {AS.CommandsDelete Delete}
   or {AS.CommandsChange Change}
+
+type AS.Class = 
+     { Tasks}
+  or { Email}
+  or { Calendar}
+  or { Contacts}
+  or { SMS}
+  or { Notes}
+
+type AS.zero_or_one = 
+     { zero}
+  or { one}
+
+type AS.filter_type = 
+     { no_filter}
+  or { one_day}
+  or { three_days}
+  or { one_week}
+  or { two_weeks}
+  or { one_month}
+  or { three_months}
+  or { six_months}
+  or { incomplete_tasks}
+
+type AS.FolderCreateType = 
+     { generic}
+  or { mail}
+  or { calendar}
+  or { contacts}
+  or { tasks}
+  or { journal}
+  or { notes}
 
 type AS.getitemestimate_options = {
   string User,
@@ -141,6 +174,20 @@ type AS.provision_options = {
   string Cmd
 }
 
+type AS.folderdelete_options = {
+  string User,
+  string DeviceType,
+  string DeviceId,
+  string Cmd
+}
+
+type AS.foldercreate_options = {
+  string User,
+  string DeviceType,
+  string DeviceId,
+  string Cmd
+}
+
 type AS.foldersync_options = {
   string User,
   string DeviceType,
@@ -156,7 +203,13 @@ type AS.BodyPreference = {
   option(int) allornone,
   int typ
 }
-type AS.Options = {option(AS.BodyPreference) bodypreference}
+type AS.Options = {
+  option(AS.BodyPreference) bodypartpreference,
+  option(AS.BodyPreference) bodypreference,
+  option(AS.Class) class,
+  option(AS.zero_or_one) conflict,
+  option(AS.filter_type) filter_type
+}
 module AS {
 
   AS.getitemestimate_options getitemestimate_default = {User:"", DeviceType:"", DeviceId:"", Cmd:""}
@@ -164,9 +217,11 @@ module AS {
   AS.sendmail_options sendmail_default = {User:"", DeviceType:"", DeviceId:"", Cmd:""}
   AS.provision_with_key_options provision_with_key_default = {User:"", DeviceType:"", DeviceId:"", Cmd:""}
   AS.provision_options provision_default = {User:"", DeviceType:"", DeviceId:"", Cmd:""}
+  AS.folderdelete_options folderdelete_default = {User:"", DeviceType:"", DeviceId:"", Cmd:""}
+  AS.foldercreate_options foldercreate_default = {User:"", DeviceType:"", DeviceId:"", Cmd:""}
   AS.foldersync_options foldersync_default = {User:"", DeviceType:"", DeviceId:"", Cmd:""}
   AS.BodyPreference BodyPreference_default = {preview:none, truncationsize:none, allornone:none, typ:0}
-  AS.Options Options_default = {bodypreference:none}
+  AS.Options Options_default = {bodypartpreference:none, bodypreference:none, class:none, conflict:none, filter_type:none}
   function getitemestimate_options(AS.getitemestimate_options options) {
     ApigenLib.params([{sreq:("User",options.User)},{sreq:("DeviceType",options.DeviceType)},{sreq:("DeviceId",options.DeviceId)},{sreq:("Cmd",options.Cmd)}])
   }
@@ -187,20 +242,29 @@ module AS {
     ApigenLib.params([{sreq:("User",options.User)},{sreq:("DeviceType",options.DeviceType)},{sreq:("DeviceId",options.DeviceId)},{sreq:("Cmd",options.Cmd)}])
   }
 
+  function folderdelete_options(AS.folderdelete_options options) {
+    ApigenLib.params([{sreq:("User",options.User)},{sreq:("DeviceType",options.DeviceType)},{sreq:("DeviceId",options.DeviceId)},{sreq:("Cmd",options.Cmd)}])
+  }
+
+  function foldercreate_options(AS.foldercreate_options options) {
+    ApigenLib.params([{sreq:("User",options.User)},{sreq:("DeviceType",options.DeviceType)},{sreq:("DeviceId",options.DeviceId)},{sreq:("Cmd",options.Cmd)}])
+  }
+
   function foldersync_options(AS.foldersync_options options) {
     ApigenLib.params([{sreq:("User",options.User)},{sreq:("DeviceType",options.DeviceType)},{sreq:("DeviceId",options.DeviceId)},{sreq:("Cmd",options.Cmd)}])
   }
 
-  gettag_SPDT = ALX.get_rec(_,{ServerId:0, ParentId:0, DisplayName:"", Type:0},function (tag,r,content) {match (tag) {
- case "ServerId": ALX.dorec(r,ALX.gettag_int,function (AS.SPDT r,int ServerId) {~{r with ServerId}},content)
- case "ParentId": ALX.dorec(r,ALX.gettag_int,function (AS.SPDT r,int ParentId) {~{r with ParentId}},content)
+  gettag_SPDT = ALX.get_rec(_,{ServerId:"", ParentId:"", DisplayName:"", Type:0},function (tag,r,content) {match (tag) {
+ case "ServerId": ALX.dorec(r,ALX.gettag_string,function (AS.SPDT r,string ServerId) {~{r with ServerId}},content)
+ case "ParentId": ALX.dorec(r,ALX.gettag_string,function (AS.SPDT r,string ParentId) {~{r with ParentId}},content)
  case "DisplayName": ALX.dorec(r,ALX.gettag_string,function (AS.SPDT r,string DisplayName) {~{r with DisplayName}},content)
  case "Type": ALX.dorec(r,ALX.gettag_int,function (AS.SPDT r,int Type) {~{r with Type}},content)
  case _: none
  }})
-  gettag_Changes = ALX.get_rec(_,{Changes:[]},function (tag,r,content) {match (tag) {
+  gettag_FolderSyncChanges = ALX.get_rec(_,{Changes:[]},function (tag,r,content) {match (tag) {
  case "Changes":
-     ALX.dorec(r,ApigenLibXml.get_list(_,gettag_AddUpdateDelete),function (AS.Changes r,list(AS.AddUpdateDelete) Changes) {~{r with Changes}},content)
+     ALX.dorec(r,ApigenLibXml.get_list(_,gettag_FolderSyncChange),
+     function (AS.FolderSyncChanges r,list(AS.FolderSyncChange) Changes) {~{r with Changes}},content)
  case _: none
  }})
   gettag_AirSyncBase_Body = ALX.get_rec(_,{Type:0, EstimatedDataSize:0, Truncated:0, Data:""},function (tag,r,content) {match (tag) {
@@ -235,15 +299,15 @@ module AS {
  }})
   gettag_Commands = ALX.get_rec(_,{Commands:[]},function (tag,r,content) {match (tag) {
  case "Commands":
-     ALX.dorec(r,ApigenLibXml.get_list(_,gettag_AddDeleteChange),
-     function (AS.Commands r,list(AS.AddDeleteChange) Commands) {~{r with Commands}},content)
+     ALX.dorec(r,ApigenLibXml.get_list(_,gettag_SyncCommands),function (AS.Commands r,list(AS.SyncCommands) Commands) {~{r with Commands}},content)
  case _: none
  }})
   gettag_ServerId = ALX.get_alt(_,function (tag,content) {match (tag) {
- case "ServerId": ALX.doalt(ALX.gettag_int,function (int ServerId) {{~ServerId}},content)
+ case "ServerId": ALX.doalt(ALX.gettag_string,function (string ServerId) {{~ServerId}},content)
  case _: none
  }})
-  gettag_AddUpdateDelete = ALX.get_alt(_,function (tag,content) {match (tag) {
+  gettag_FolderSyncChange = ALX.get_alt(_,function (tag,content) {match (tag) {
+ case "Count": ALX.doalt(ALX.gettag_int,function (int Count) {{~Count}},content)
  case "Add": ALX.doalt(gettag_SPDT,function (AS.SPDT Add) {{~Add}},content)
  case "Update": ALX.doalt(gettag_SPDT,function (AS.SPDT Update) {{~Update}},content)
  case "Delete": ALX.doalt(gettag_ServerId,function (AS.ServerId Delete) {{~Delete}},content)
@@ -285,10 +349,46 @@ module AS {
  case "Categories": ALX.doalt(ApigenLibXml.get_list(_,gettag_Category),function (list(AS.Category) Categories) {{~Categories}},content)
  case _: none
  }})
-  gettag_AddDeleteChange = ALX.get_alt(_,function (tag,content) {match (tag) {
+  gettag_SyncCommands = ALX.get_alt(_,function (tag,content) {match (tag) {
  case "Add": ALX.doalt(gettag_CommandsAdd,function (AS.CommandsAdd Add) {{~Add}},content)
  case "Delete": ALX.doalt(gettag_CommandsDelete,function (AS.CommandsDelete Delete) {{~Delete}},content)
  case "Change": ALX.doalt(gettag_CommandsChange,function (AS.CommandsChange Change) {{~Change}},content)
+ case _: none
+ }})
+  gettag_Class = ALX.get_alt(_,function (tag,content) {match (tag) {
+ case "Tasks": ALX.doalt(ALX.gettag_label,function ( Tasks) {{~Tasks}},content)
+ case "Email": ALX.doalt(ALX.gettag_label,function ( Email) {{~Email}},content)
+ case "Calendar": ALX.doalt(ALX.gettag_label,function ( Calendar) {{~Calendar}},content)
+ case "Contacts": ALX.doalt(ALX.gettag_label,function ( Contacts) {{~Contacts}},content)
+ case "SMS": ALX.doalt(ALX.gettag_label,function ( SMS) {{~SMS}},content)
+ case "Notes": ALX.doalt(ALX.gettag_label,function ( Notes) {{~Notes}},content)
+ case _: none
+ }})
+  gettag_zero_or_one = ALX.get_alt(_,function (tag,content) {match (tag) {
+ case "0": ALX.doalt(ALX.gettag_label,function ( zero) {{~zero}},content)
+ case "1": ALX.doalt(ALX.gettag_label,function ( one) {{~one}},content)
+ case _: none
+ }})
+  gettag_filter_type = ALX.get_alt(_,function (tag,content) {match (tag) {
+ case "0": ALX.doalt(ALX.gettag_label,function ( no_filter) {{~no_filter}},content)
+ case "1": ALX.doalt(ALX.gettag_label,function ( one_day) {{~one_day}},content)
+ case "2": ALX.doalt(ALX.gettag_label,function ( three_days) {{~three_days}},content)
+ case "3": ALX.doalt(ALX.gettag_label,function ( one_week) {{~one_week}},content)
+ case "4": ALX.doalt(ALX.gettag_label,function ( two_weeks) {{~two_weeks}},content)
+ case "5": ALX.doalt(ALX.gettag_label,function ( one_month) {{~one_month}},content)
+ case "6": ALX.doalt(ALX.gettag_label,function ( three_months) {{~three_months}},content)
+ case "7": ALX.doalt(ALX.gettag_label,function ( six_months) {{~six_months}},content)
+ case "8": ALX.doalt(ALX.gettag_label,function ( incomplete_tasks) {{~incomplete_tasks}},content)
+ case _: none
+ }})
+  gettag_FolderCreateType = ALX.get_alt(_,function (tag,content) {match (tag) {
+ case "1": ALX.doalt(ALX.gettag_label,function ( generic) {{~generic}},content)
+ case "12": ALX.doalt(ALX.gettag_label,function ( mail) {{~mail}},content)
+ case "13": ALX.doalt(ALX.gettag_label,function ( calendar) {{~calendar}},content)
+ case "14": ALX.doalt(ALX.gettag_label,function ( contacts) {{~contacts}},content)
+ case "15": ALX.doalt(ALX.gettag_label,function ( tasks) {{~tasks}},content)
+ case "16": ALX.doalt(ALX.gettag_label,function ( journal) {{~journal}},content)
+ case "17": ALX.doalt(ALX.gettag_label,function ( notes) {{~notes}},content)
  case _: none
  }})
   
@@ -300,31 +400,31 @@ module AS {
 
   function outcome(string,string) pack_GetItemEstimate(string collection_id,string synckey) {
     msg = xmlns_GetItemEstimate(collection_id,synckey)
-    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:2},msg,336))
+    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:1},msg,336))
   }
 
   
   function xmlns xmlns_Sync(option(AS.Options) syncoptions,option(int) deletesasmoves,bool getchanges,string collection_id,string synckey) {
     xmlns @unsafe_cast(
-<Sync xmlns="AirSync"><Collections><Collection><SyncKey>{synckey}</SyncKey><CollectionId>{collection_id}</CollectionId>{ALX.make_simple_sequence("",match (deletesasmoves) { case {some:deletesasmoves}: [("DeletesAsMoves",{Int:deletesasmoves})]; case {none}: []; })}{ALX.make_simple_sequence("",if (getchanges) [("GetChanges",{Empty})] else [])}{match (syncoptions) { case {some:(~{bodypreference})}: ALX.xmlnsl(xmlns_Options(bodypreference)); case {none}: []; } }</Collection></Collections></Sync>
+<Sync xmlns="AirSync"><Collections><Collection><SyncKey>{synckey}</SyncKey><CollectionId>{collection_id}</CollectionId>{match (deletesasmoves) { case {some:deletesasmoves}: ALX.make_simple_sequence("",[("DeletesAsMoves",{Int:deletesasmoves})]); case {none}: ALX.xmlnsl0(); }}{ALX.make_simple_sequence("",if (getchanges) [("GetChanges",{Empty})] else [])}{match (syncoptions) { case {some:syncoptions}: match (syncoptions) { case ~{bodypartpreference,bodypreference,class,conflict,filter_type}: ALX.xmlnsl(xmlns_Options(bodypartpreference,bodypreference,class,conflict,filter_type)); }; case {none}: ALX.xmlnsl0(); }}</Collection></Collections></Sync>
 )
   }
 
   function outcome(string,string) pack_Sync(option(AS.Options) syncoptions,option(int) deletesasmoves,bool getchanges,string collection_id,string synckey) {
     msg = xmlns_Sync(syncoptions,deletesasmoves,getchanges,collection_id,synckey)
-    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:2},msg,496))
+    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:1},msg,650))
   }
 
   
   function xmlns xmlns_SendMail(string mime,bool save_in_sent_items,option(string) account_id,string client_id) {
     xmlns @unsafe_cast(
-<SendMail xmlns="ComposeMail"><ClientId>{client_id}</ClientId>{ALX.make_simple_sequence("",match (account_id) { case {some:account_id}: [("AccountId",{String:account_id})]; case {none}: []; })}{ALX.make_simple_sequence("",if (save_in_sent_items) [("SaveInSentItems",{Empty})] else [])}<Mime><Opaque>{mime}</Opaque></Mime></SendMail>
+<SendMail xmlns="ComposeMail"><ClientId>{client_id}</ClientId>{match (account_id) { case {some:account_id}: ALX.make_simple_sequence("",[("AccountId",{String:account_id})]); case {none}: ALX.xmlnsl0(); }}{ALX.make_simple_sequence("",if (save_in_sent_items) [("SaveInSentItems",{Empty})] else [])}<Mime><Opaque>{mime}</Opaque></Mime></SendMail>
 )
   }
 
   function outcome(string,string) pack_SendMail(string mime,bool save_in_sent_items,option(string) account_id,string client_id) {
     msg = xmlns_SendMail(mime,save_in_sent_items,account_id,client_id)
-    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:2},msg,332))
+    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:1},msg,343))
   }
 
   
@@ -336,7 +436,7 @@ module AS {
 
   function outcome(string,string) pack_ProvisionWithKey(int status,string policy_key) {
     msg = xmlns_ProvisionWithKey(status,policy_key)
-    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:2},msg,190))
+    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:1},msg,190))
   }
 
   
@@ -348,7 +448,31 @@ module AS {
 
   function outcome(string,string) pack_Provision(ApigenLib.simple_seq params) {
     msg = xmlns_Provision(params)
-    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:2},msg,297))
+    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:1},msg,297))
+  }
+
+  
+  function xmlns xmlns_FolderDelete(string serverid,string synckey) {
+    xmlns @unsafe_cast(
+<FolderDelete xmlns="FolderHierarchy"><SyncKey>{synckey}</SyncKey><ServerId>{serverid}</ServerId></FolderDelete>
+)
+  }
+
+  function outcome(string,string) pack_FolderDelete(string serverid,string synckey) {
+    msg = xmlns_FolderDelete(serverid,synckey)
+    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:1},msg,112))
+  }
+
+  
+  function xmlns xmlns_FolderCreate(AS.FolderCreateType typ,string displayname,string parentid,string synckey) {
+    xmlns @unsafe_cast(
+<FolderCreate xmlns="FolderHierarchy"><SyncKey>{synckey}</SyncKey><ParentId>{parentid}</ParentId><DisplayName>{displayname}</DisplayName>{ALX.make_simple_sequence("",match (typ) { case {generic}: [("Type",{Int:1})]; case {mail}: [("Type",{Int:12})]; case {calendar}: [("Type",{Int:13})]; case {contacts}: [("Type",{Int:14})]; case {tasks}: [("Type",{Int:15})]; case {journal}: [("Type",{Int:16})]; case {notes}: [("Type",{Int:17})] })}</FolderCreate>
+)
+  }
+
+  function outcome(string,string) pack_FolderCreate(AS.FolderCreateType typ,string displayname,string parentid,string synckey) {
+    msg = xmlns_FolderCreate(typ,displayname,parentid,synckey)
+    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:1},msg,450))
   }
 
   
@@ -360,7 +484,7 @@ module AS {
 
   function outcome(string,string) pack_FolderSync(string synckey) {
     msg = xmlns_FolderSync(synckey)
-    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:2},msg,77))
+    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:1},msg,77))
   }
 
   
@@ -376,27 +500,27 @@ module AS {
   }
 
   
-  function xmlns xmlns_Options(option(AS.BodyPreference) bodypreference) {
+  function xmlns xmlns_Options(option(AS.BodyPreference) bodypartpreference,option(AS.BodyPreference) bodypreference,option(AS.Class) class,option(AS.zero_or_one) conflict,option(AS.filter_type) filter_type) {
     xmlns @unsafe_cast(
-<Options>{match (bodypreference) { case {some:(~{preview,truncationsize,allornone,typ})}: ALX.xmlnsl(xmlns_BodyPreference(preview,truncationsize,allornone,typ)); case {none}: []; } }</Options>
+<Options>{match (filter_type) { case {some:filter_type}: ALX.make_simple_sequence("",match (filter_type) { case {no_filter}: [("FilterType",{Int:0})]; case {one_day}: [("FilterType",{Int:1})]; case {three_days}: [("FilterType",{Int:2})]; case {one_week}: [("FilterType",{Int:3})]; case {two_weeks}: [("FilterType",{Int:4})]; case {one_month}: [("FilterType",{Int:5})]; case {three_months}: [("FilterType",{Int:6})]; case {six_months}: [("FilterType",{Int:7})]; case {incomplete_tasks}: [("FilterType",{Int:8})] }); case {none}: ALX.xmlnsl0(); }}{match (conflict) { case {some:conflict}: ALX.make_simple_sequence("",match (conflict) { case {zero}: [("Conflict",{Int:0})]; case {one}: [("Conflict",{Int:1})] }); case {none}: ALX.xmlnsl0(); }}{match (class) { case {some:class}: ALX.make_simple_sequence("",match (class) { case {Tasks}: [("Class",{String:"Tasks"})]; case {Email}: [("Class",{String:"Email"})]; case {Calendar}: [("Class",{String:"Calendar"})]; case {Contacts}: [("Class",{String:"Contacts"})]; case {SMS}: [("Class",{String:"SMS"})]; case {Notes}: [("Class",{String:"Notes"})] }); case {none}: ALX.xmlnsl0(); }}{match (bodypreference) { case {some:bodypreference}: match (bodypreference) { case ~{preview,truncationsize,allornone,typ}: ALX.xmlnsl(xmlns_BodyPreference(preview,truncationsize,allornone,typ)); }; case {none}: ALX.xmlnsl0(); }}{match (bodypartpreference) { case {some:bodypartpreference}: match (bodypartpreference) { case ~{preview,truncationsize,allornone,typ}: ALX.xmlnsl(xmlns_BodyPreference(preview,truncationsize,allornone,typ)); }; case {none}: ALX.xmlnsl0(); }}</Options>
 )
   }
 
-  function outcome(string,string) pack_Options(option(AS.BodyPreference) bodypreference) {
-    msg = xmlns_Options(bodypreference)
-    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:2},msg,192))
+  function outcome(string,string) pack_Options(option(AS.BodyPreference) bodypartpreference,option(AS.BodyPreference) bodypreference,option(AS.Class) class,option(AS.zero_or_one) conflict,option(AS.filter_type) filter_type) {
+    msg = xmlns_Options(bodypartpreference,bodypreference,class,conflict,filter_type)
+    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:1},msg,1607))
   }
 
   
   function xmlns xmlns_BodyPreference(option(int) preview,option(int) truncationsize,option(int) allornone,int typ) {
     xmlns @unsafe_cast(
-<AirSyncBase:BodyPreference><AirSyncBase:Type>{typ}</AirSyncBase:Type>{ALX.make_simple_sequence("AirSyncBase",match (truncationsize) { case {some:truncationsize}: [("TruncationSize",{Int:truncationsize})]; case {none}: []; })}{ALX.make_simple_sequence("AirSyncBase",match (allornone) { case {some:allornone}: [("AllOrNone",{Int:allornone})]; case {none}: []; })}{ALX.make_simple_sequence("AirSyncBase",match (preview) { case {some:preview}: [("Preview",{Int:preview})]; case {none}: []; })}</AirSyncBase:BodyPreference>
+<AirSyncBase:BodyPreference><AirSyncBase:Type>{typ}</AirSyncBase:Type>{match (truncationsize) { case {some:truncationsize}: ALX.make_simple_sequence("AirSyncBase",[("TruncationSize",{Int:truncationsize})]); case {none}: ALX.xmlnsl0(); }}{match (allornone) { case {some:allornone}: ALX.make_simple_sequence("AirSyncBase",[("AllOrNone",{Int:allornone})]); case {none}: ALX.xmlnsl0(); }}{match (preview) { case {some:preview}: ALX.make_simple_sequence("AirSyncBase",[("Preview",{Int:preview})]); case {none}: ALX.xmlnsl0(); }}</AirSyncBase:BodyPreference>
 )
   }
 
   function outcome(string,string) pack_BodyPreference(option(int) preview,option(int) truncationsize,option(int) allornone,int typ) {
     msg = xmlns_BodyPreference(preview,truncationsize,allornone,typ)
-    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:2},msg,519))
+    Outcome.map_success(function (ctxt) {%%bslBinary.to_encoding%%(ctxt.buf,"binary")})(WBXml.of_xmlns({ActiveSyncDefs.context with debug:1},msg,552))
   }
 
   function getitemestimate(AS.getitemestimate_options options,string endpoint,ApigenLib.auth auth,list(string) headers,string collection_id,string synckey) {
@@ -447,6 +571,28 @@ module AS {
     path = "/Microsoft-Server-ActiveSync"
     options = provision_options(options)
     content = pack_Provision(params)
+    match (content) {
+    case {success:content}:
+        ApigenLib.POST_WBXML(endpoint,path,options,auth,headers,content,ApigenLib.build_from_content_type(_,some(ActiveSyncDefs.context)))
+    case {~failure}: {failure:{pack:failure}}
+    }
+  }
+
+  function folderdelete(AS.folderdelete_options options,string endpoint,ApigenLib.auth auth,list(string) headers,string serverid,string synckey) {
+    path = "/Microsoft-Server-ActiveSync"
+    options = folderdelete_options(options)
+    content = pack_FolderDelete(serverid,synckey)
+    match (content) {
+    case {success:content}:
+        ApigenLib.POST_WBXML(endpoint,path,options,auth,headers,content,ApigenLib.build_from_content_type(_,some(ActiveSyncDefs.context)))
+    case {~failure}: {failure:{pack:failure}}
+    }
+  }
+
+  function foldercreate(AS.foldercreate_options options,string endpoint,ApigenLib.auth auth,list(string) headers,AS.FolderCreateType typ,string displayname,string parentid,string synckey) {
+    path = "/Microsoft-Server-ActiveSync"
+    options = foldercreate_options(options)
+    content = pack_FolderCreate(typ,displayname,parentid,synckey)
     match (content) {
     case {success:content}:
         ApigenLib.POST_WBXML(endpoint,path,options,auth,headers,content,ApigenLib.build_from_content_type(_,some(ActiveSyncDefs.context)))

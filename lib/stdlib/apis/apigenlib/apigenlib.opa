@@ -1066,6 +1066,8 @@ type ApigenLib.parsed_xml_path_element = { string tag, list(ApigenLib.parsed_xml
 
 type ApigenLib.parsed_xml_path = list(ApigenLib.parsed_xml_path_element)
 
+type ApigenLib.xml_extractor('a) = ApigenLib.parsed_xml_path, xmlns -> outcome(list('a),string)
+
 module ApigenLibXml {
 
 function dbg(where) {

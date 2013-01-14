@@ -69,6 +69,8 @@ type ApigenLib.general_value =
  or {int Int}
  or {bool Bool}
  or {float Float}
+ or {binary Binary}
+ or {Date.date Datetime}
  or {xmlns Verbatim}
  or {Empty}
 
@@ -125,6 +127,10 @@ module ApigenLib {
       default: tz
       }
     "{Date.to_formatted_string(fmt, d)}{tz}"
+  }
+
+  function date_to_string2(Date.date d) {
+    "{Date.to_formatted_string(fmt, d)}{Date.to_formatted_string(tzfmt, d)}"
   }
 
   private function generic_build_path(path, options) {
@@ -1284,6 +1290,10 @@ function dbg(where) {
                  case {Int:i}: [{text:Int.to_string(i)}];
                  case {Bool:b}: [{text:Bool.to_string(b)}];
                  case {Float:f}: [{text:Float.to_string(f)}];
+                 case {Binary:bin}:
+                   [{args:[], content:[{text:%%bslBinary.to_encoding%%(bin,"binary")}],
+                     ~namespace, specific_attributes:none, xmlns:[], tag:"Opaque"}];
+                 case {Datetime:d}: [{text:ApigenLib.date_to_string2(d)}];
                  case {~Verbatim}: [Verbatim];
                  case {Empty}: [];
                  }
@@ -1298,6 +1308,7 @@ function dbg(where) {
   function gettag_unknown(list(xmlns) content) { {some:content} }
 
   function gettag_label(list(xmlns) _content) { {some:{}} }
+  function gettag_empty(list(xmlns) content) { {some:true} }
 
   function gettag_value(get, list(xmlns) content) {
     match (content) {
@@ -1364,6 +1375,14 @@ function dbg(where) {
       }
     }
     aux(content)
+  }
+
+  function get_option(list(xmlns) content, get) {
+    //jlog("get_option: content={String.concat("\n",List.map(Xmlns.to_string,content))}")
+    match (get(content)) {
+    case {some:v}: {some:{some:v}};
+    case {none}: {some:{none}};
+    }
   }
 
   function get_list(list(xmlns) content, get) {
